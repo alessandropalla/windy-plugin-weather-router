@@ -354,7 +354,8 @@
         if (animating) dispatch('animationControl', { playing: true, speed: animSpeed });
     }
 
-    $: timelineRows = result && $t
+    // Re-evaluated whenever result or locale ($t) changes
+    $: timelineRows = $t && result
         ? result.optimalPath.map((p, idx) => ({
               index: idx,
               timeLabel: formatTime(p.time),
@@ -577,7 +578,7 @@
             label.setAttribute('text-anchor', 'middle');
             if (useLocalTime) {
                 const isMidnight = d.getHours() === 0;
-                const dateStr = formatShortDate(t, true).split(' ')[0]; // locale-aware D/M or M/D
+                const dateStr = formatShortDate(t, true).split(' ')[0]; // locale-aware DD/MM or MM/DD
                 label.textContent = isMidnight
                     ? `${dateStr} 00`
                     : `${String(d.getHours()).padStart(2, '0')}`;
