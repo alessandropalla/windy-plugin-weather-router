@@ -1,67 +1,67 @@
 <div class="results-panel">
     {#if !result}
-        <p class="size-xs fg-grey">No routing result yet. Configure route and polars, then compute.</p>
+        <p class="size-xs fg-grey">{$t('results.empty')}</p>
     {:else}
         <!-- Summary Card -->
         <div class="summary-card mb-15">
-            <div class="summary-title size-s mb-5">Route Summary</div>
+            <div class="summary-title size-s mb-5">{$t('results.summary')}</div>
             <div class="summary-grid">
                 <div class="stat">
                     <span class="stat-value">{result.metrics.totalDistanceNm.toFixed(1)}</span>
-                    <span class="stat-label">nm</span>
+                    <span class="stat-label">{$t('results.nm')}</span>
                 </div>
                 <div class="stat">
                     <span class="stat-value">{formatDuration(result.metrics.totalTimeHours)}</span>
-                    <span class="stat-label">duration</span>
+                    <span class="stat-label">{$t('results.duration')}</span>
                 </div>
                 <div class="stat">
                     <span class="stat-value">{result.metrics.avgSpeedKt.toFixed(1)}</span>
-                    <span class="stat-label">avg kt</span>
+                    <span class="stat-label">{$t('results.avgKt')}</span>
                 </div>
                 <div class="stat">
                     <span class="stat-value">{result.metrics.maxWindKt.toFixed(0)}</span>
-                    <span class="stat-label">max wind kt</span>
+                    <span class="stat-label">{$t('results.maxWindKt')}</span>
                 </div>
                 <div class="stat">
                     <span class="stat-value">{result.metrics.maxWaveM.toFixed(1)}</span>
-                    <span class="stat-label">max waves m</span>
+                    <span class="stat-label">{$t('results.maxWavesM')}</span>
                 </div>
             </div>
             <div class="summary-grid mt-5">
                 <div class="stat">
                     <span class="stat-value">{formatTime(result.departureTime)}</span>
-                    <span class="stat-label">departure</span>
+                    <span class="stat-label">{$t('results.departure')}</span>
                 </div>
                 <div class="stat">
                     <span class="stat-value">{formatTime(result.metrics.arrivalTime)}</span>
-                    <span class="stat-label">arrival</span>
+                    <span class="stat-label">{$t('results.arrival')}</span>
                 </div>
             </div>
             {#if result.metrics.motoringTimeHours > 0}
                 <div class="motor-info mt-5 size-xs">
-                    ⚙ Motoring: {formatDuration(result.metrics.motoringTimeHours)} ({result.metrics.motoringDistanceNm.toFixed(1)} nm), Fuel: {result.metrics.fuelConsumedLiters.toFixed(1)} L
+                    {$t('results.motoring', { dur: formatDuration(result.metrics.motoringTimeHours), nm: result.metrics.motoringDistanceNm.toFixed(1), fuel: result.metrics.fuelConsumedLiters.toFixed(1) })}
                 </div>
             {/if}
             {#if result.optimizedDeparture}
-                <div class="optimize-info mt-5 size-xs">✓ Departure time optimized</div>
+                <div class="optimize-info mt-5 size-xs">{$t('results.optimizedDeparture')}</div>
             {/if}
         </div>
 
         <!-- Leg Table -->
         {#if result.metrics.legs.length > 0}
             <div class="mb-15">
-                <div class="size-s mb-5">Leg Details</div>
+                <div class="size-s mb-5">{$t('results.legDetails')}</div>
                 <div class="leg-table-wrap">
                     <table class="leg-table size-xs">
                         <thead>
                             <tr>
-                                <th>Leg</th>
-                                <th>Dist</th>
-                                <th>Time</th>
-                                <th>Avg Spd</th>
-                                <th>Avg Wind</th>
-                                <th>Max Wind</th>
-                                <th>Motor %</th>
+                                <th>{$t('results.leg')}</th>
+                                <th>{$t('results.dist')}</th>
+                                <th>{$t('results.time')}</th>
+                                <th>{$t('results.avgSpd')}</th>
+                                <th>{$t('results.avgWind')}</th>
+                                <th>{$t('results.maxWind')}</th>
+                                <th>{$t('results.motorPct')}</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -84,32 +84,32 @@
 
         <!-- Timeline Charts -->
         <div class="mb-15">
-            <div class="size-s mb-5">Route Timeline</div>
-            <div class="size-xs fg-grey mb-5">X-axis: {useLocalTime ? 'Local time' : 'UTC time'} (tick = 1 hour)</div>
-            <div class="chart-label size-xs fg-grey">Wind Speed (kt)</div>
+            <div class="size-s mb-5">{$t('results.timeline')}</div>
+            <div class="size-xs fg-grey mb-5">{$t('results.xAxisLabel', { tz: useLocalTime ? $t('settings.local') : $t('settings.utc') })}</div>
+            <div class="chart-label size-xs fg-grey">{$t('results.windSpeed')}</div>
             <svg bind:this={windChartEl} class="timeline-chart"></svg>
-            <div class="chart-label size-xs fg-grey mt-10">Boat Speed (kt)</div>
+            <div class="chart-label size-xs fg-grey mt-10">{$t('results.boatSpeed')}</div>
             <svg bind:this={speedChartEl} class="timeline-chart"></svg>
-            <div class="chart-label size-xs fg-grey mt-10">True Wind Angle (°)</div>
+            <div class="chart-label size-xs fg-grey mt-10">{$t('results.twa')}</div>
             <svg bind:this={twaChartEl} class="timeline-chart"></svg>
-            <div class="chart-label size-xs fg-grey mt-10">Wave Height (m)</div>
+            <div class="chart-label size-xs fg-grey mt-10">{$t('results.waveHeight')}</div>
             <svg bind:this={wavesChartEl} class="timeline-chart"></svg>
         </div>
 
         <div class="mb-15">
-            <div class="size-s mb-5">Timeline Data Table</div>
-            <div class="size-xs fg-grey mb-5">Same values as charts, sampled at each route point.</div>
+            <div class="size-s mb-5">{$t('results.timelineTable')}</div>
+            <div class="size-xs fg-grey mb-5">{$t('results.timelineNote')}</div>
             <div class="timeline-table-wrap">
                 <table class="timeline-table size-xs">
                     <thead>
                         <tr>
                             <th>#</th>
-                            <th>Time ({useLocalTime ? 'Local' : 'UTC'})</th>
-                            <th>Wind (kt)</th>
-                            <th>Boat (kt)</th>
-                            <th>TWA (°)</th>
-                            <th>Waves (m)</th>
-                            <th>Mode</th>
+                            <th>{$t('results.timeCol', { tz: useLocalTime ? $t('settings.local') : $t('settings.utc') })}</th>
+                            <th>{$t('results.windKt')}</th>
+                            <th>{$t('results.boatKt')}</th>
+                            <th>{$t('results.twaDeg')}</th>
+                            <th>{$t('results.wavesM')}</th>
+                            <th>{$t('results.mode')}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -121,7 +121,7 @@
                                 <td>{row.boatspeedKt}</td>
                                 <td>{row.twaDeg}</td>
                                 <td>{row.waveM}</td>
-                                <td>{row.isMotoring ? 'Motor' : 'Sail'}</td>
+                                <td>{row.isMotoring ? $t('results.motor') : $t('results.sail')}</td>
                             </tr>
                         {/each}
                     </tbody>
@@ -130,30 +130,30 @@
         </div>
 
         <div class="mb-15">
-            <div class="size-s mb-5">Route Color Legend</div>
+            <div class="size-s mb-5">{$t('results.colorLegend')}</div>
             <div class="legend-row size-xs">
-                <span class="swatch" style="background:#4dc9f6"></span>Wind &lt; 8 kt
+                <span class="swatch" style="background:#4dc9f6"></span>{$t('results.wind8')}
             </div>
             <div class="legend-row size-xs">
-                <span class="swatch" style="background:#4caf50"></span>Wind 8-15 kt
+                <span class="swatch" style="background:#4caf50"></span>{$t('results.wind8_15')}
             </div>
             <div class="legend-row size-xs">
-                <span class="swatch" style="background:#ff9800"></span>Wind 15-25 kt
+                <span class="swatch" style="background:#ff9800"></span>{$t('results.wind15_25')}
             </div>
             <div class="legend-row size-xs">
-                <span class="swatch" style="background:#f44336"></span>Wind &gt; 25 kt
+                <span class="swatch" style="background:#f44336"></span>{$t('results.wind25')}
             </div>
             <div class="legend-row size-xs">
-                <span class="swatch" style="background:#9c27b0"></span>Motoring segment
+                <span class="swatch" style="background:#9c27b0"></span>{$t('results.motoringSegment')}
             </div>
         </div>
 
         <div class="mb-15">
-            <div class="size-s mb-5">Export Route</div>
+            <div class="size-s mb-5">{$t('results.export')}</div>
             <div class="export-buttons">
-                <button class="button button--variant-ghost size-xs" on:click={() => dispatch('exportRoute', 'gpx')}>Export GPX</button>
-                <button class="button button--variant-ghost size-xs" on:click={() => dispatch('exportRoute', 'csv')}>Export CSV</button>
-                <button class="button button--variant-ghost size-xs" on:click={() => dispatch('exportRoute', 'geojson')}>Export GeoJSON</button>
+                <button class="button button--variant-ghost size-xs" on:click={() => dispatch('exportRoute', 'gpx')}>{$t('results.exportGpx')}</button>
+                <button class="button button--variant-ghost size-xs" on:click={() => dispatch('exportRoute', 'csv')}>{$t('results.exportCsv')}</button>
+                <button class="button button--variant-ghost size-xs" on:click={() => dispatch('exportRoute', 'geojson')}>{$t('results.exportGeojson')}</button>
             </div>
         </div>
 
@@ -161,51 +161,51 @@
         <div class="mb-10">
             <label class="size-xs">
                 <input type="checkbox" bind:checked={showIsochrones} on:change={() => dispatch('toggleIsochrones', showIsochrones)} />
-                Show isochrone lines on map
+                {$t('results.showIsochrones')}
             </label>
         </div>
 
         <!-- Animate Route -->
         <div class="mb-15">
-            <div class="size-s mb-5">Animate Route</div>
+            <div class="size-s mb-5">{$t('results.animate')}</div>
             <div class="anim-controls">
                 {#if !animating}
-                    <button class="button size-xs" on:click={startAnim}>▶ Play</button>
+                    <button class="button size-xs" on:click={startAnim}>{$t('results.play')}</button>
                 {:else}
-                    <button class="button size-xs" on:click={stopAnim}>■ Stop</button>
+                    <button class="button size-xs" on:click={stopAnim}>{$t('results.stop')}</button>
                 {/if}
-                <label class="size-xs">Speed:</label>
+                <label class="size-xs">{$t('results.speed')}</label>
                 <select class="form-control-sm" bind:value={animSpeed} on:change={onSpeedChange}>
-                    <option value={1}>Slow</option>
-                    <option value={5}>Normal</option>
-                    <option value={20}>Fast</option>
-                    <option value={60}>Flash</option>
+                    <option value={1}>{$t('results.slow')}</option>
+                    <option value={5}>{$t('results.normal')}</option>
+                    <option value={20}>{$t('results.fast')}</option>
+                    <option value={60}>{$t('results.flash')}</option>
                 </select>
             </div>
         </div>
 
         <div class="mb-15">
-            <div class="size-s mb-5">Route Comparison</div>
+            <div class="size-s mb-5">{$t('results.comparison')}</div>
             <div class="size-xs fg-grey mb-5">
-                Primary route is highlighted first. Alternatives compare objective tradeoffs and, when enabled, each objective's best departure time.
+                {$t('results.comparisonNote')}
             </div>
             <div class="comparison-table-wrap">
                 <table class="comparison-table size-xs">
                     <thead>
                         <tr>
-                            <th>Route</th>
-                            <th>Objective</th>
-                            <th>Departure</th>
-                            <th>Arrival</th>
-                            <th>Duration</th>
-                            <th>Distance</th>
-                            <th>Avg kt</th>
-                            <th>Motor h</th>
-                            <th>Fuel L</th>
-                            <th>Max wind</th>
-                            <th>Max waves</th>
-                            <th>Tradeoff</th>
-                            <th>Action</th>
+                            <th>{$t('results.routeCol')}</th>
+                            <th>{$t('results.objective')}</th>
+                            <th>{$t('results.departureCol')}</th>
+                            <th>{$t('results.arrivalCol')}</th>
+                            <th>{$t('results.durationCol')}</th>
+                            <th>{$t('results.distanceCol')}</th>
+                            <th>{$t('results.avgKtCol')}</th>
+                            <th>{$t('results.motorH')}</th>
+                            <th>{$t('results.fuelL')}</th>
+                            <th>{$t('results.maxWindCol')}</th>
+                            <th>{$t('results.maxWavesCol')}</th>
+                            <th>{$t('results.tradeoff')}</th>
+                            <th>{$t('results.action')}</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -225,13 +225,13 @@
                                 <td>{row.tradeoff}</td>
                                 <td>
                                     {#if row.primary || row.alternativeIndex === null}
-                                        <span class="size-xs fg-grey">Selected</span>
+                                        <span class="size-xs fg-grey">{$t('results.selected')}</span>
                                     {:else}
                                         <button
                                             class="button button--variant-ghost size-xs"
                                             on:click={() => dispatch('selectPrimaryRoute', { alternativeIndex: row.alternativeIndex ?? -1 })}
                                         >
-                                            Make Primary
+                                            {$t('results.makePrimary')}
                                         </button>
                                     {/if}
                                 </td>
@@ -241,34 +241,34 @@
                 </table>
             </div>
             {#if alternativesRequested && alternativeResults.length === 0}
-                <div class="size-xs fg-grey mt-5">No feasible objective-based alternatives found with current constraints. Try looser limits.</div>
+                <div class="size-xs fg-grey mt-5">{$t('results.noAlternatives')}</div>
             {/if}
             {#if !alternativesRequested}
-                <div class="size-xs fg-grey mt-5">Enable Route Alternatives in Settings to compare additional route variants.</div>
+                <div class="size-xs fg-grey mt-5">{$t('results.alternativesHint')}</div>
             {/if}
         </div>
 
         {#if result.optimizedDeparture && result.departureAnalysis && result.departureAnalysis.length > 0}
             <div class="mb-15">
-                <div class="size-s mb-5">Departure Time Comparison</div>
+                <div class="size-s mb-5">{$t('results.departureComparison')}</div>
                 <div class="size-xs fg-grey mb-5">
-                    Each row is one tested departure in the optimization window for the selected objective.
+                    {$t('results.departureNote')}
                 </div>
                 <div class="comparison-table-wrap">
                     <table class="comparison-table size-xs">
                         <thead>
                             <tr>
-                                <th>Departure</th>
-                                <th>Arrival</th>
-                                <th>Duration</th>
-                                <th>Distance</th>
-                                <th>Avg kt</th>
-                                <th>Motor h</th>
-                                <th>Fuel L</th>
-                                <th>Max wind</th>
-                                <th>Max waves</th>
-                                <th>Score</th>
-                                <th>Status</th>
+                                <th>{$t('results.departureCol')}</th>
+                                <th>{$t('results.arrivalCol')}</th>
+                                <th>{$t('results.durationCol')}</th>
+                                <th>{$t('results.distanceCol')}</th>
+                                <th>{$t('results.avgKtCol')}</th>
+                                <th>{$t('results.motorH')}</th>
+                                <th>{$t('results.fuelL')}</th>
+                                <th>{$t('results.maxWindCol')}</th>
+                                <th>{$t('results.maxWavesCol')}</th>
+                                <th>{$t('results.score')}</th>
+                                <th>{$t('results.status')}</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -284,7 +284,7 @@
                                     <td>{dep.maxWindKt.toFixed(0)} kt</td>
                                     <td>{dep.maxWaveM.toFixed(1)} m</td>
                                     <td>{dep.optimizationScore.toFixed(3)}</td>
-                                    <td>{dep.selected ? 'Selected' : 'Candidate'}</td>
+                                    <td>{dep.selected ? $t('results.statusSelected') : $t('results.statusCandidate')}</td>
                                 </tr>
                             {/each}
                         </tbody>
@@ -298,6 +298,7 @@
 <script lang="ts">
     import { createEventDispatcher, afterUpdate } from 'svelte';
     import type { RouteResult, IsochronePoint } from '../types/routing';
+    import { t, tGet, formatShortDate } from '../lib/i18n';
 
     const dispatch = createEventDispatcher<{
         toggleIsochrones: boolean;
@@ -353,7 +354,8 @@
         if (animating) dispatch('animationControl', { playing: true, speed: animSpeed });
     }
 
-    $: timelineRows = result
+    // Re-evaluated whenever result or locale ($t) changes
+    $: timelineRows = $t && result
         ? result.optimalPath.map((p, idx) => ({
               index: idx,
               timeLabel: formatTime(p.time),
@@ -365,7 +367,7 @@
           }))
         : [];
 
-        $: comparisonRows = buildComparisonRows(result, alternativeResults);
+        $: comparisonRows = buildComparisonRows(result, alternativeResults, $t);
 
     afterUpdate(() => {
         if (result && result.optimalPath.length > 1) {
@@ -386,16 +388,16 @@
         return `${m}m`;
     }
 
-    function buildComparisonRows(primary: RouteResult | null, alternatives: RouteResult[]): ComparisonRow[] {
+    function buildComparisonRows(primary: RouteResult | null, alternatives: RouteResult[], tFn: (k: string, p?: Record<string, string | number>) => string = tGet): ComparisonRow[] {
         if (!primary) {
             return [];
         }
 
         const rows: ComparisonRow[] = [
-            toComparisonRow(primary, 'Primary', true, null, null),
+            toComparisonRow(primary, tFn('results.primary'), true, null, null, tFn),
             ...alternatives.map((alt, idx) => {
-                const label = alt.variantLabel || `Alt ${idx + 1}`;
-                return toComparisonRow(alt, label, false, idx, primary);
+                const label = alt.variantLabel || tFn('results.altLabel', { n: idx + 1 });
+                return toComparisonRow(alt, label, false, idx, primary, tFn);
             }),
         ];
 
@@ -408,6 +410,7 @@
         primary: boolean,
         alternativeIndex: number | null,
         baseline: RouteResult | null,
+        tFn: (k: string, p?: Record<string, string | number>) => string = tGet,
     ): ComparisonRow {
         return {
             routeLabel,
@@ -423,13 +426,13 @@
             fuelConsumedLiters: route.metrics.fuelConsumedLiters,
             maxWindKt: route.metrics.maxWindKt,
             maxWaveM: route.metrics.maxWaveM,
-            tradeoff: describeTradeoff(route, baseline),
+            tradeoff: describeTradeoff(route, baseline, tFn),
         };
     }
 
-    function describeTradeoff(route: RouteResult, baseline: RouteResult | null): string {
+    function describeTradeoff(route: RouteResult, baseline: RouteResult | null, tFn: (k: string, p?: Record<string, string | number>) => string = tGet): string {
         if (!baseline) {
-            return 'Baseline route used for map and exports';
+            return tFn('tradeoff.baseline');
         }
 
         const timeDelta = route.metrics.totalTimeHours - baseline.metrics.totalTimeHours;
@@ -439,17 +442,17 @@
 
         const notes: string[] = [];
 
-        if (timeDelta <= -0.25) notes.push(`${formatSignedHours(timeDelta)} faster`);
-        if (timeDelta >= 0.25) notes.push(`${formatSignedHours(timeDelta)} slower`);
-        if (fuelDelta <= -0.2) notes.push(`${formatSigned(fuelDelta, 1)} L fuel`);
-        if (fuelDelta >= 0.2) notes.push(`${formatSigned(fuelDelta, 1)} L fuel`);
-        if (windDelta <= -0.5) notes.push(`${formatSigned(windDelta, 1)} kt max wind`);
-        if (windDelta >= 0.5) notes.push(`${formatSigned(windDelta, 1)} kt max wind`);
-        if (waveDelta <= -0.1) notes.push(`${formatSigned(waveDelta, 1)} m max waves`);
-        if (waveDelta >= 0.1) notes.push(`${formatSigned(waveDelta, 1)} m max waves`);
+        if (timeDelta <= -0.25) notes.push(`${formatSignedHours(timeDelta)} ${tFn('tradeoff.faster')}`);
+        if (timeDelta >= 0.25) notes.push(`${formatSignedHours(timeDelta)} ${tFn('tradeoff.slower')}`);
+        if (fuelDelta <= -0.2) notes.push(`${formatSigned(fuelDelta, 1)} ${tFn('tradeoff.fuel')}`);
+        if (fuelDelta >= 0.2) notes.push(`${formatSigned(fuelDelta, 1)} ${tFn('tradeoff.fuel')}`);
+        if (windDelta <= -0.5) notes.push(`${formatSigned(windDelta, 1)} ${tFn('tradeoff.maxWind')}`);
+        if (windDelta >= 0.5) notes.push(`${formatSigned(windDelta, 1)} ${tFn('tradeoff.maxWind')}`);
+        if (waveDelta <= -0.1) notes.push(`${formatSigned(waveDelta, 1)} ${tFn('tradeoff.maxWaves')}`);
+        if (waveDelta >= 0.1) notes.push(`${formatSigned(waveDelta, 1)} ${tFn('tradeoff.maxWaves')}`);
 
         if (notes.length === 0) {
-            return 'Similar profile to primary route';
+            return tFn('tradeoff.similar');
         }
 
         return notes.join(', ');
@@ -470,12 +473,7 @@
     }
 
     function formatTime(ts: number): string {
-        if (!ts) return '--';
-        const d = new Date(ts);
-        if (useLocalTime) {
-            return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-        }
-        return `${d.getUTCMonth() + 1}/${d.getUTCDate()} ${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}Z`;
+        return formatShortDate(ts, useLocalTime);
     }
 
     function drawTimelineChart(
@@ -580,13 +578,15 @@
             label.setAttribute('text-anchor', 'middle');
             if (useLocalTime) {
                 const isMidnight = d.getHours() === 0;
+                const dateStr = formatShortDate(t, true).split(' ')[0]; // locale-aware DD/MM or MM/DD
                 label.textContent = isMidnight
-                    ? `${d.getMonth() + 1}/${d.getDate()} 00`
+                    ? `${dateStr} 00`
                     : `${String(d.getHours()).padStart(2, '0')}`;
             } else {
                 const isMidnightUtc = d.getUTCHours() === 0;
+                const dateStr = formatShortDate(t, false).split(' ')[0];
                 label.textContent = isMidnightUtc
-                    ? `${d.getUTCMonth() + 1}/${d.getUTCDate()} 00Z`
+                    ? `${dateStr} 00Z`
                     : `${String(d.getUTCHours()).padStart(2, '0')}Z`;
             }
             svg.appendChild(label);
@@ -598,7 +598,7 @@
         xAxisLabel.setAttribute('font-size', '8');
         xAxisLabel.setAttribute('fill', '#999');
         xAxisLabel.setAttribute('text-anchor', 'middle');
-        xAxisLabel.textContent = useLocalTime ? 'Local time' : 'UTC time';
+        xAxisLabel.textContent = tGet('results.xAxisLabel', { tz: useLocalTime ? tGet('settings.local') : tGet('settings.utc') });
         svg.appendChild(xAxisLabel);
     }
 
