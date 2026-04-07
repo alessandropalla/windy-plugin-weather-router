@@ -218,6 +218,12 @@ export function computeRoute(
     // Compute metrics
     const metrics = computeMetrics(optimalPath, waypoints, config.boat.motor);
 
+    if (config.mode === 'arrival-deadline' && typeof config.arrivalDeadline === 'number') {
+        if (metrics.arrivalTime > config.arrivalDeadline) {
+            throw new Error('Arrival deadline cannot be met with current settings and weather window');
+        }
+    }
+
     return {
         optimalPath,
         isochrones: allIsochrones,
@@ -244,6 +250,10 @@ export function computeRouteWithDepartureOptimization(
     const stepMs = config.departureStepHours * 3600 * 1000;
     let bestResult: RouteResult | null = null;
     let bestTime = Infinity;
+    let latestDepartureMeetingDeadline = -Infinity;
+
+    const deadlineMode =
+        config.mode === 'arrival-deadline' && typeof config.arrivalDeadline === 'number';
 
     const baseDeparture = config.departureTime;
     const numTries = Math.floor(windowMs / stepMs) + 1;
@@ -261,13 +271,26 @@ export function computeRouteWithDepartureOptimization(
 
         try {
             const result = computeRoute(waypoints, trialConfig, windGrid);
-            if (result.optimalPath.length > 0 && result.metrics.totalTimeHours < bestTime) {
+
+            if (deadlineMode) {
+                // In deadline mode, successful routes already satisfy the deadline.
+                // Pick the latest departure that still arrives on time.
+                if (result.departureTime > latestDepartureMeetingDeadline) {
+                    latestDepartureMeetingDeadline = result.departureTime;
+                    bestResult = { ...result, optimizedDeparture: true };
+                }
+            } else if (result.optimalPath.length > 0 && result.metrics.totalTimeHours < bestTime) {
+                // In min-time mode, pick fastest route.
                 bestTime = result.metrics.totalTimeHours;
                 bestResult = { ...result, optimizedDeparture: true };
             }
         } catch {
             // Skip failed departures
         }
+    }
+
+    if (deadlineMode && !bestResult) {
+        throw new Error('No departure in the optimization window can meet the selected arrival deadline');
     }
 
     if (!bestResult) {

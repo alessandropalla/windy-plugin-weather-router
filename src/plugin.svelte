@@ -78,6 +78,7 @@
             result={routeResult}
             useLocalTime={Boolean(settingsCache.useLocalTime)}
             on:toggleIsochrones={e => toggleIsochroneDisplay(e.detail)}
+            on:exportRoute={e => exportRoute(e.detail)}
         />
     {/if}
 </section>
@@ -99,7 +100,7 @@
 
     import type { PolarDiagram } from './types/polar';
     import { DEFAULT_MOTOR_CONFIG } from './types/polar';
-    import type { Waypoint, RouteConfig, RouteResult } from './types/routing';
+    import type { Waypoint, RouteConfig, RouteResult, IsochronePoint } from './types/routing';
     import type { WindGrid } from './lib/windgrid';
     import { fetchWindGrid } from './lib/windgrid';
     import { computeRoute, computeRouteWithDepartureOptimization } from './lib/routing';
@@ -338,7 +339,7 @@
             const prev = path[i - 1];
             const curr = path[i];
             const color = curr.isMotoring
-                ? '#ff9800' // orange for motoring
+                ? '#9c27b0' // purple for motoring
                 : windSpeedColor(curr.tws);
 
             const segment = new L.Polyline(
@@ -405,6 +406,105 @@
         if (tws < 15) return '#4caf50';
         if (tws < 25) return '#ff9800';
         return '#f44336';
+    }
+
+    function exportRoute(format: 'gpx' | 'csv' | 'geojson') {
+        if (!routeResult || routeResult.optimalPath.length < 2) {
+            errorMsg = 'No route available to export yet.';
+            return;
+        }
+
+        const route = routeResult.optimalPath;
+        const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+
+        if (format === 'gpx') {
+            const content = routeToGPX(route);
+            downloadTextFile(`weather-route-${stamp}.gpx`, content, 'application/gpx+xml');
+            return;
+        }
+
+        if (format === 'csv') {
+            const content = routeToCSV(route);
+            downloadTextFile(`weather-route-${stamp}.csv`, content, 'text/csv');
+            return;
+        }
+
+        const content = routeToGeoJSON(route);
+        downloadTextFile(`weather-route-${stamp}.geojson`, content, 'application/geo+json');
+    }
+
+    function routeToCSV(route: IsochronePoint[]): string {
+        const header = [
+            'index',
+            'timestamp_iso',
+            'lat',
+            'lon',
+            'boat_speed_kt',
+            'wind_speed_kt',
+            'wind_dir_deg',
+            'twa_deg',
+            'is_motoring',
+        ].join(',');
+
+        const lines = route.map((p, i) => [
+            i,
+            new Date(p.time).toISOString(),
+            p.lat.toFixed(6),
+            p.lon.toFixed(6),
+            p.boatSpeed.toFixed(2),
+            p.tws.toFixed(2),
+            p.twd.toFixed(1),
+            p.twa.toFixed(1),
+            p.isMotoring ? '1' : '0',
+        ].join(','));
+
+        return [header, ...lines].join('\n');
+    }
+
+    function routeToGPX(route: IsochronePoint[]): string {
+        const rtePoints = route.map((p, i) => `
+    <rtept lat="${p.lat.toFixed(6)}" lon="${p.lon.toFixed(6)}">
+      <name>WP ${i + 1}</name>
+      <time>${new Date(p.time).toISOString()}</time>
+      <desc>Boat ${p.boatSpeed.toFixed(1)}kt, Wind ${p.tws.toFixed(1)}kt @ ${p.twd.toFixed(0)}deg, ${p.isMotoring ? 'Motoring' : 'Sailing'}</desc>
+    </rtept>`).join('');
+
+        return `<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="Windy Weather Router" xmlns="http://www.topografix.com/GPX/1/1">
+  <rte>
+    <name>Weather Route</name>${rtePoints}
+  </rte>
+</gpx>`;
+    }
+
+    function routeToGeoJSON(route: IsochronePoint[]): string {
+        const featureCollection = {
+            type: 'FeatureCollection',
+            features: [
+                {
+                    type: 'Feature',
+                    properties: {
+                        name: 'Weather Route',
+                    },
+                    geometry: {
+                        type: 'LineString',
+                        coordinates: route.map(p => [Number(p.lon.toFixed(6)), Number(p.lat.toFixed(6))]),
+                    },
+                },
+            ],
+        };
+
+        return JSON.stringify(featureCollection, null, 2);
+    }
+
+    function downloadTextFile(fileName: string, content: string, mimeType: string) {
+        const blob = new Blob([content], { type: mimeType });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        a.click();
+        URL.revokeObjectURL(url);
     }
 
     // --- Cleanup ---

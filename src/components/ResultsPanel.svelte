@@ -90,6 +90,65 @@
             <svg bind:this={twaChartEl} class="timeline-chart"></svg>
         </div>
 
+        <div class="mb-15">
+            <div class="size-s mb-5">Timeline Data Table</div>
+            <div class="size-xs fg-grey mb-5">Same values as charts, sampled at each route point.</div>
+            <div class="timeline-table-wrap">
+                <table class="timeline-table size-xs">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Time ({useLocalTime ? 'Local' : 'UTC'})</th>
+                            <th>Wind (kt)</th>
+                            <th>Boat (kt)</th>
+                            <th>TWA (°)</th>
+                            <th>Mode</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {#each timelineRows as row}
+                            <tr class:motoring-row={row.isMotoring}>
+                                <td>{row.index}</td>
+                                <td>{row.timeLabel}</td>
+                                <td>{row.windKt}</td>
+                                <td>{row.boatspeedKt}</td>
+                                <td>{row.twaDeg}</td>
+                                <td>{row.isMotoring ? 'Motor' : 'Sail'}</td>
+                            </tr>
+                        {/each}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="mb-15">
+            <div class="size-s mb-5">Route Color Legend</div>
+            <div class="legend-row size-xs">
+                <span class="swatch" style="background:#4dc9f6"></span>Wind &lt; 8 kt
+            </div>
+            <div class="legend-row size-xs">
+                <span class="swatch" style="background:#4caf50"></span>Wind 8-15 kt
+            </div>
+            <div class="legend-row size-xs">
+                <span class="swatch" style="background:#ff9800"></span>Wind 15-25 kt
+            </div>
+            <div class="legend-row size-xs">
+                <span class="swatch" style="background:#f44336"></span>Wind &gt; 25 kt
+            </div>
+            <div class="legend-row size-xs">
+                <span class="swatch" style="background:#9c27b0"></span>Motoring segment
+            </div>
+        </div>
+
+        <div class="mb-15">
+            <div class="size-s mb-5">Export Route</div>
+            <div class="export-buttons">
+                <button class="button button--variant-ghost size-xs" on:click={() => dispatch('exportRoute', 'gpx')}>Export GPX</button>
+                <button class="button button--variant-ghost size-xs" on:click={() => dispatch('exportRoute', 'csv')}>Export CSV</button>
+                <button class="button button--variant-ghost size-xs" on:click={() => dispatch('exportRoute', 'geojson')}>Export GeoJSON</button>
+            </div>
+        </div>
+
         <!-- Map Options -->
         <div class="mb-10">
             <label class="size-xs">
@@ -104,7 +163,10 @@
     import { createEventDispatcher, afterUpdate } from 'svelte';
     import type { RouteResult, IsochronePoint } from '../types/routing';
 
-    const dispatch = createEventDispatcher<{ toggleIsochrones: boolean }>();
+    const dispatch = createEventDispatcher<{
+        toggleIsochrones: boolean;
+        exportRoute: 'gpx' | 'csv' | 'geojson';
+    }>();
 
     export let result: RouteResult | null = null;
     export let useLocalTime = false;
@@ -113,6 +175,17 @@
     let speedChartEl: SVGSVGElement;
     let twaChartEl: SVGSVGElement;
     let showIsochrones = false;
+
+    $: timelineRows = result
+        ? result.optimalPath.map((p, idx) => ({
+              index: idx,
+              timeLabel: formatTime(p.time),
+              windKt: p.tws.toFixed(1),
+              boatspeedKt: p.boatSpeed.toFixed(1),
+              twaDeg: p.twa.toFixed(0),
+              isMotoring: p.isMotoring,
+          }))
+        : [];
 
     afterUpdate(() => {
         if (result && result.optimalPath.length > 1) {
@@ -329,6 +402,53 @@
     }
     .chart-label {
         margin-bottom: 2px;
+    }
+    .legend-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 4px;
+    }
+    .swatch {
+        width: 14px;
+        height: 10px;
+        border-radius: 2px;
+        border: 1px solid rgba(255,255,255,0.2);
+        display: inline-block;
+        flex-shrink: 0;
+    }
+    .export-buttons {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+    }
+    .timeline-table-wrap {
+        max-height: 220px;
+        overflow: auto;
+        border: 1px solid #333;
+        border-radius: 4px;
+    }
+    .timeline-table {
+        border-collapse: collapse;
+        width: 100%;
+        th, td {
+            border-bottom: 1px solid #333;
+            padding: 4px 6px;
+            text-align: center;
+            white-space: nowrap;
+        }
+        th {
+            position: sticky;
+            top: 0;
+            background: #222;
+            z-index: 1;
+        }
+        td:nth-child(2), th:nth-child(2) {
+            text-align: left;
+        }
+    }
+    .motoring-row {
+        background: rgba(156, 39, 176, 0.12);
     }
     input[type="checkbox"] {
         margin-right: 4px;
