@@ -1,0 +1,28 @@
+import { describe, expect, it } from 'vitest';
+import { bearing, destinationPoint, distanceNm, normalizeAngle, computeTWA } from './geo';
+
+describe('geo', () => {
+    it('computes approximately 60nm for one degree of longitude at equator', () => {
+        const d = distanceNm(0, 0, 0, 1);
+        expect(d).toBeGreaterThan(59.9);
+        expect(d).toBeLessThan(60.2);
+    });
+
+    it('computes cardinal bearings', () => {
+        expect(bearing(0, 0, 1, 0)).toBeCloseTo(0, 6);
+        expect(bearing(0, 0, 0, 1)).toBeCloseTo(90, 6);
+    });
+
+    it('reaches expected destination for due-east travel', () => {
+        const [lat, lon] = destinationPoint(0, 0, 90, 60);
+        expect(lat).toBeCloseTo(0, 3);
+        expect(lon).toBeCloseTo(1, 2);
+    });
+
+    it('normalizes angles and computes symmetric TWA', () => {
+        expect(normalizeAngle(-10)).toBe(350);
+        expect(normalizeAngle(725)).toBe(5);
+        expect(computeTWA(350, 10)).toBe(20);
+        expect(computeTWA(10, 350)).toBe(20);
+    });
+});
