@@ -218,9 +218,16 @@
     $: drawWaypointMarkers(waypoints);
     $: drawReferenceLine(waypoints);
 
+    // --- Reactive: crosshair cursor while placing waypoints or drawing no-go zones ---
+    $: map?.getContainer?.()?.classList.toggle('router-crosshair', waypointAddMode || drawingNoGoZone);
+
     function onWaypointsChange(e: CustomEvent<Waypoint[]>) {
         waypoints = e.detail;
         saveWaypoints(waypoints);
+        // Computed route is now stale — clear it from the map
+        clearRouteDisplay();
+        routeResult = null;
+        alternativeResults = [];
     }
 
     function onSettingsChange(e: CustomEvent) {
@@ -368,7 +375,7 @@
         for (const zone of noGoZones) {
             if (zone.vertices.length < 3) continue;
             const polygon = new L.Polygon(
-                zone.vertices.map(v => [v.lat, v.lon] as [number, number]),
+                [zone.vertices.map(v => [v.lat, v.lon] as [number, number])],
                 { color: '#f44336', fillColor: '#f44336', fillOpacity: 0.2, weight: 2 },
             ).addTo(map);
             polygon.bindTooltip(zone.name, { permanent: false });
@@ -813,6 +820,7 @@
 
     onMount(() => {
         singleclick.on(name, onMapClick);
+        drawNoGoZonesOnMap(); // render zones already loaded by onopen
     });
 
     onDestroy(() => {
@@ -822,6 +830,10 @@
 </script>
 
 <style lang="less">
+    :global(.router-crosshair),
+    :global(.router-crosshair *) {
+        cursor: crosshair !important;
+    }
     .main-tabs {
         display: flex;
         gap: 2px;
