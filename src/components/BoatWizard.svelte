@@ -1,5 +1,5 @@
 <script lang="ts">
-    import { generateBoatClassPolar, type BoatClass } from '../lib/polar';
+    import { generateBoatClassPolar, scalePolarByLength, type BoatClass } from '../lib/polar';
     import type { BoatConfig } from '../types/polar';
     import { DEFAULT_MOTOR_CONFIG } from '../types/polar';
 
@@ -9,6 +9,7 @@
     let step = 1;
     let boatClass: BoatClass = 'cruiser';
     let boatName = '';
+    let boatLength = 35; // Default 35 feet (≈10.7 meters)
     let hasSpinnaker = false;
     let motorEnabled = false;
 
@@ -56,15 +57,33 @@
     ];
 
     function handleComplete() {
-        const polar = generateBoatClassPolar(boatClass);
+        let polar = generateBoatClassPolar(boatClass);
+        
+        // Scale polar based on boat length
+        // Convert feet to meters (1 foot = 0.3048 meters)
+        const lengthMeters = boatLength * 0.3048;
+        if (Math.abs(lengthMeters - 10) > 0.1) {
+            polar = scalePolarByLength(polar, lengthMeters);
+        }
+        
+        // Set boat name
         if (boatName.trim()) {
             polar.name = boatName;
         }
 
-        // TODO: Apply spinnaker multiplier if selected
+        // Apply spinnaker boost to downwind speeds (angles > 135°)
         if (hasSpinnaker) {
-            // Optionally boost downwind speeds for spinnaker
-            // This is a simple demo - you'd want to adjust the speeds array
+            polar = {
+                ...polar,
+                speeds: polar.speeds.map((row, twaIdx) => {
+                    const twa = polar.twaValues[twaIdx];
+                    if (twa > 135) {
+                        // Boost downwind speeds by 15% with spinnaker
+                        return row.map(speed => speed * 1.15);
+                    }
+                    return row;
+                })
+            };
         }
 
         const config: BoatConfig = {
@@ -136,6 +155,21 @@
                         placeholder="e.g., My Sailing Boat"
                     />
                 </div>
+feet):</label>
+                    <input
+                        type="number"
+                        id="boatLength"
+                        bind:value={boatLength}
+                        min="10"
+                        max="330"
+                        step="1"
+                    />
+                    <div class="length-info">
+                        Length affects performance scaling. Default is 35 feet
+                    <div class="length-info">
+                        Length affects performance scaling. Default is 10 meters.
+                    </div>
+                </div>
 
                 <div class="form-group checkbox">
                     <label>
@@ -174,6 +208,10 @@
                     <div class="summary-item">
                         <span class="label">Boat Name:</span>
                         <span class="value">{boatName || '(Using class default name)'}</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="label">Boat Length:</span>
+                        <span class="value">{boatLength} ft</span>
                     </div>
                     <div class="summary-item">
                         <span class="label">Spinnaker:</span>
@@ -337,6 +375,27 @@
         outline: none;
         border-color: #667eea;
         box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    .form-group input[type='number'] {
+        width: 100%;
+        padding: 0.75rem;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 1rem;
+        box-sizing: border-box;
+    }
+
+    .form-group input[type='number']:focus {
+        outline: none;
+        border-color: #667eea;
+        box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    .length-info {
+        margin-top: 0.5rem;
+        font-size: 0.8rem;
+        color: #999;
     }
 
     .form-group.checkbox {

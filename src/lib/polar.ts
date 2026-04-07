@@ -409,3 +409,31 @@ export function generateBoatClassPolar(boatClass: BoatClass): PolarDiagram {
             return getExamplePolar();
     }
 }
+
+/**
+ * Scale a polar diagram based on boat length.
+ * Longer boats generally have better performance.
+ * Uses a curve based on typical sailboat scaling laws.
+ * Reference length (base) is assumed to be 10 meters.
+ * @param polar The base polar diagram
+ * @param lengthMeters Boat length in meters
+ * @returns A new polar with scaled speeds
+ */
+export function scalePolarByLength(polar: PolarDiagram, lengthMeters: number): PolarDiagram {
+    const baseLength = 10; // Reference length in meters
+    const lengthRatio = lengthMeters / baseLength;
+    
+    // Speed scaling based on boat length
+    // For sailboats, speed scales roughly as √(length), but we use a slightly gentler curve
+    // to account for increased weight/drag with size
+    const speedMultiplier = Math.pow(lengthRatio, 0.45);
+    
+    const scaledSpeeds = polar.speeds.map(row =>
+        row.map(speed => speed * speedMultiplier)
+    );
+
+    return {
+        ...polar,
+        speeds: scaledSpeeds,
+    };
+}
