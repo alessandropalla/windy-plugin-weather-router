@@ -7,7 +7,7 @@ const config: ExternalPluginConfig = {
     title: 'Weather Router',
     description: 'Sailboat weather routing with isochrone optimization for Windy.com.',
     author: 'Alessandro Palla',
-    repository: 'https://github.com/alessandropalla/windy-router-plugin',
+    repository: 'https://github.com/alessandropalla/windy-plugin-weather-router',
     desktopUI: 'rhpane',
     mobileUI: 'fullscreen',
     routerPath: '/weather-router',
