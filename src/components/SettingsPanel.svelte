@@ -100,6 +100,34 @@
         <label class="size-xs">Max duration (hours):</label>
         <input class="form-control-sm" type="number" min="12" max="480" step="12" bind:value={maxDurationHours} on:change={emitChange} />
     </div>
+    <div class="form-row mb-5">
+        <label class="size-xs">
+            <input type="checkbox" bind:checked={useWaveLimit} on:change={emitChange} />
+            Max wave height limit
+        </label>
+    </div>
+    {#if useWaveLimit}
+        <div class="form-row mb-10 indent">
+            <label class="size-xs">Max wave height (m):</label>
+            <input class="form-control-sm" type="number" min="0.5" max="15" step="0.5" bind:value={maxWaveHeightM} on:change={emitChange} />
+        </div>
+    {/if}
+
+    <hr class="mb-10 mt-10" />
+    <h3 class="size-s mb-10">Route Alternatives</h3>
+    <div class="form-row mb-5">
+        <label class="size-xs">
+            <input type="checkbox" bind:checked={routeAlternatives} on:change={emitChange} />
+            Compute alternative routes
+        </label>
+    </div>
+    {#if routeAlternatives}
+        <div class="form-row mb-10 indent">
+            <label class="size-xs">Heading bias (°):</label>
+            <input class="form-control-sm" type="number" min="5" max="60" step="5" bind:value={alternativesFanBias} on:change={emitChange} />
+            <span class="size-xs fg-grey">Fan offset per alternative</span>
+        </div>
+    {/if}
 </div>
 
 <script lang="ts">
@@ -135,6 +163,12 @@
     let angularResolution = 10;
     let maxDurationHours = 168; // 7 days
 
+    // Safety & alternatives
+    let useWaveLimit = false;
+    let maxWaveHeightM = 4.0;
+    let routeAlternatives = false;
+    let alternativesFanBias = 25;
+
     onMount(() => {
         applyValue(value);
     });
@@ -162,6 +196,11 @@
         timeStepHours = next.timeStepHours ?? timeStepHours;
         angularResolution = next.angularResolution ?? angularResolution;
         maxDurationHours = next.maxDurationHours ?? maxDurationHours;
+
+        useWaveLimit = typeof next.maxWaveHeightM === 'number' && next.maxWaveHeightM > 0;
+        maxWaveHeightM = next.maxWaveHeightM || 4.0;
+        routeAlternatives = next.routeAlternatives ?? routeAlternatives;
+        alternativesFanBias = next.alternativesFanBias ?? alternativesFanBias;
 
         const nextMotor = next.motor;
         if (nextMotor) {
@@ -228,6 +267,9 @@
             departureStepHours,
             product,
             useLocalTime,
+            maxWaveHeightM: useWaveLimit ? maxWaveHeightM : 0,
+            routeAlternatives,
+            alternativesFanBias,
             motor: {
                 enabled: motorEnabled,
                 motorSpeed,
@@ -252,6 +294,9 @@
             departureStepHours,
             product,
             useLocalTime,
+            maxWaveHeightM: useWaveLimit ? maxWaveHeightM : 0,
+            routeAlternatives,
+            alternativesFanBias,
             motor: {
                 enabled: motorEnabled,
                 motorSpeed,

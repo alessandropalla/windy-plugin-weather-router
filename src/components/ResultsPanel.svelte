@@ -164,6 +164,38 @@
                 Show isochrone lines on map
             </label>
         </div>
+
+        <!-- Animate Route -->
+        <div class="mb-15">
+            <div class="size-s mb-5">Animate Route</div>
+            <div class="anim-controls">
+                {#if !animating}
+                    <button class="button size-xs" on:click={startAnim}>▶ Play</button>
+                {:else}
+                    <button class="button size-xs" on:click={stopAnim}>■ Stop</button>
+                {/if}
+                <label class="size-xs">Speed:</label>
+                <select class="form-control-sm" bind:value={animSpeed} on:change={onSpeedChange}>
+                    <option value={1}>Slow</option>
+                    <option value={5}>Normal</option>
+                    <option value={20}>Fast</option>
+                    <option value={60}>Flash</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Alternative Routes -->
+        {#if alternativeResults && alternativeResults.length > 0}
+            <div class="mb-15">
+                <div class="size-s mb-5">Alternative Routes</div>
+                {#each alternativeResults as alt, i}
+                    <div class="alt-row size-xs">
+                        <span class="alt-swatch" style="background:{i === 0 ? '#6ab0de' : '#9b8dc7'}"></span>
+                        Alt {i + 1}: {alt.metrics.totalDistanceNm.toFixed(0)} nm &mdash; {formatDuration(alt.metrics.totalTimeHours)}
+                    </div>
+                {/each}
+            </div>
+        {/if}
     {/if}
 </div>
 
@@ -174,16 +206,37 @@
     const dispatch = createEventDispatcher<{
         toggleIsochrones: boolean;
         exportRoute: 'gpx' | 'csv' | 'geojson';
+        animationControl: { playing: boolean; speed: number };
     }>();
 
     export let result: RouteResult | null = null;
+    export let alternativeResults: RouteResult[] = [];
     export let useLocalTime = false;
+    export let animating = false;
 
     let windChartEl: SVGSVGElement;
     let speedChartEl: SVGSVGElement;
     let twaChartEl: SVGSVGElement;
     let wavesChartEl: SVGSVGElement;
     let showIsochrones = false;
+
+    // Animation
+    let animSpeed = 5; // steps per second
+
+    // Laylines
+    // (removed)
+
+    function startAnim() {
+        dispatch('animationControl', { playing: true, speed: animSpeed });
+    }
+
+    function stopAnim() {
+        dispatch('animationControl', { playing: false, speed: animSpeed });
+    }
+
+    function onSpeedChange() {
+        if (animating) dispatch('animationControl', { playing: true, speed: animSpeed });
+    }
 
     $: timelineRows = result
         ? result.optimalPath.map((p, idx) => ({
@@ -464,5 +517,24 @@
     }
     input[type="checkbox"] {
         margin-right: 4px;
+    }
+    .anim-controls {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+    .alt-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 4px;
+    }
+    .alt-swatch {
+        width: 22px;
+        height: 3px;
+        border-radius: 2px;
+        display: inline-block;
+        flex-shrink: 0;
     }
 </style>

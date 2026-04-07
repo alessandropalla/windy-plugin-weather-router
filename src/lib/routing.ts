@@ -101,7 +101,7 @@ export function computeRoute(
 
             // Generate candidate headings: fan around the bearing to target
             const bearingToTarget = bearing(parent.lat, parent.lon, targetWp.lat, targetWp.lon);
-            const headings = generateHeadings(bearingToTarget, angularResolution);
+            const headings = generateHeadings(bearingToTarget, angularResolution, config.headingBias ?? 0);
 
             for (const hdg of headings) {
                 // Get wind at parent position and current time
@@ -142,6 +142,14 @@ export function computeRoute(
                 // Check bounds (simple sanity check)
                 if (Math.abs(newLat) > 85) {
                     continue;
+                }
+
+                // Wave height safety filter (skip if sea state exceeds limit, waypoints exempt)
+                if (config.maxWaveHeightM && config.maxWaveHeightM > 0 && wind.waveHeight > config.maxWaveHeightM) {
+                    const nearWaypoint = waypoints.some(
+                        wp => distanceNm(newLat, newLon, wp.lat, wp.lon) <= ARRIVAL_RADIUS_NM,
+                    );
+                    if (!nearWaypoint) continue;
                 }
 
                 // Land avoidance: skip if destination or leg crosses land,
@@ -348,12 +356,12 @@ export function computeRouteWithDepartureOptimization(
 }
 
 /** Generate heading candidates fanning around a target bearing */
-function generateHeadings(targetBearing: number, angularResolution: number): number[] {
+function generateHeadings(targetBearing: number, angularResolution: number, bias = 0): number[] {
     const headings: number[] = [];
     // Fan ±90° around the target bearing (full 180° arc towards destination)
     const halfFan = 90;
     for (let offset = -halfFan; offset <= halfFan; offset += angularResolution) {
-        headings.push(normalizeAngle(targetBearing + offset));
+        headings.push(normalizeAngle(targetBearing + offset + bias));
     }
     return headings;
 }

@@ -34,6 +34,14 @@ export interface RouteConfig {
     useLocalTime?: boolean;
     /** Boat configuration (polars + motor) */
     boat: BoatConfig;
+    /** Maximum wave height in meters; isochrone points in higher seas are excluded. 0 = disabled. */
+    maxWaveHeightM?: number;
+    /** Whether to compute alternative routes with different heading biases. */
+    routeAlternatives?: boolean;
+    /** Heading fan bias in degrees used for each alternative route (default 25). */
+    alternativesFanBias?: number;
+    /** Internal: heading-fan bias offset for alternative route generation. */
+    headingBias?: number;
 }
 
 /** A single point on an isochrone front */

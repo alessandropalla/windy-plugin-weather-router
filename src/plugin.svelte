@@ -113,9 +113,12 @@
     {:else if activeTab === 'results'}
         <ResultsPanel
             result={routeResult}
+            alternativeResults={alternativeResults}
             useLocalTime={Boolean(settingsCache.useLocalTime)}
+            animating={animPlaying}
             on:toggleIsochrones={e => toggleIsochroneDisplay(e.detail)}
             on:exportRoute={e => exportRoute(e.detail)}
+            on:animationControl={e => handleAnimationControl(e.detail.playing, e.detail.speed)}
         />
     {/if}
 </section>
@@ -137,7 +140,7 @@
 
     import type { PolarDiagram } from './types/polar';
     import { DEFAULT_MOTOR_CONFIG } from './types/polar';
-    import type { Waypoint, RouteConfig, RouteResult, IsochronePoint, NoGoZone } from './types/routing';
+    import type { Waypoint, RouteConfig, RouteResult, IsochronePoint, NoGoZone, RoutingProgress } from './types/routing';
     import type { WindGrid } from './lib/windgrid';
     import { fetchWindGrid, fetchElevationGrid } from './lib/windgrid';
     import type { ElevationGrid } from './lib/windgrid';
@@ -172,6 +175,9 @@
         departureWindowHours: 72,
         departureStepHours: 6,
         product: 'ecmwf',
+        maxWaveHeightM: 0,
+        routeAlternatives: false,
+        alternativesFanBias: 25,
         motor: { ...DEFAULT_MOTOR_CONFIG },
     };
 
@@ -187,6 +193,16 @@
     let optimalRoutePolyline: L.Polyline | null = null;
     let isochroneLines: L.Polyline[] = [];
     let showIsochrones = false;
+
+    // Route alternatives
+    let alternativeResults: RouteResult[] = [];
+    let alternativePolylines: L.Polyline[][] = [];
+    const ALT_COLORS = ['#6ab0de', '#9b8dc7'];
+
+    // Animation
+    let animTimer: ReturnType<typeof setInterval> | null = null;
+    let animMarker: L.CircleMarker | null = null;
+    let animPlaying = false;
 
     // No-Go Zones
     let noGoZones: NoGoZone[] = [];
@@ -375,6 +391,27 @@
         }
     }
 
+    // --- Routing helpers ---
+    function runRoutingTask(
+        routeConfig: RouteConfig,
+        windGrid: WindGrid,
+        elevationGrid: ElevationGrid,
+        onProgress?: (p: RoutingProgress) => void,
+    ): Promise<RouteResult> {
+        return new Promise<RouteResult>((resolve, reject) => {
+            setTimeout(() => {
+                try {
+                    const r = routeConfig.optimizeDeparture
+                        ? computeRouteWithDepartureOptimization(waypoints, routeConfig, windGrid, onProgress, elevationGrid, noGoZones)
+                        : computeRoute(waypoints, routeConfig, windGrid, onProgress, elevationGrid, noGoZones);
+                    resolve(r);
+                } catch (e) {
+                    reject(e);
+                }
+            }, 50);
+        });
+    }
+
     // --- Routing ---
     async function runRouting() {
         if (waypoints.length < 2) {
@@ -438,32 +475,41 @@
                 departureWindowHours: settings.departureWindowHours || 72,
                 departureStepHours: settings.departureStepHours || 6,
                 product: settings.product || 'ecmwf',
+                maxWaveHeightM: settings.maxWaveHeightM ?? 0,
+                routeAlternatives: settings.routeAlternatives || false,
+                alternativesFanBias: settings.alternativesFanBias ?? 25,
                 boat: {
                     polar: currentPolar,
                     motor: settings.motor || DEFAULT_MOTOR_CONFIG,
                 },
             };
 
-            // Run routing (use setTimeout to allow UI to update)
-            const result = await new Promise<RouteResult>((resolve, reject) => {
-                setTimeout(() => {
-                    try {
-                        const r = routeConfig.optimizeDeparture
-                            ? computeRouteWithDepartureOptimization(waypoints, routeConfig, windGrid, p => {
-                                  progressMsg = p.message;
-                              }, elevationGrid, noGoZones)
-                            : computeRoute(waypoints, routeConfig, windGrid, p => {
-                                  progressMsg = p.message;
-                              }, elevationGrid, noGoZones);
-                        resolve(r);
-                    } catch (e) {
-                        reject(e);
-                    }
-                }, 50);
+            // Primary route
+            progressMsg = 'Running isochrone algorithm...';
+            const result = await runRoutingTask(routeConfig, windGrid, elevationGrid, p => {
+                progressMsg = p.message;
             });
 
             routeResult = result;
             drawOptimalRoute(result);
+
+            // Alternative routes (run with ±heading bias)
+            alternativeResults = [];
+            clearAlternativeRoutes();
+            if (routeConfig.routeAlternatives) {
+                const bias = routeConfig.alternativesFanBias ?? 25;
+                for (const b of [bias, -bias]) {
+                    progressMsg = `Computing alternative (bias ${b > 0 ? '+' : ''}${b}°)...`;
+                    try {
+                        const altConfig: RouteConfig = { ...routeConfig, headingBias: b, routeAlternatives: false };
+                        const altResult = await runRoutingTask(altConfig, windGrid, elevationGrid);
+                        alternativeResults = [...alternativeResults, altResult];
+                    } catch {
+                        // skip failed alternative
+                    }
+                }
+                drawAlternativeRoutes(alternativeResults);
+            }
             progressMsg = '';
             activeTab = 'results';
         } catch (e) {
@@ -539,6 +585,73 @@
         }
     }
 
+    // --- Alternative routes ---
+    function clearAlternativeRoutes() {
+        for (const group of alternativePolylines) for (const l of group) l.remove();
+        alternativePolylines = [];
+    }
+
+    function drawAlternativeRoutes(alts: RouteResult[]) {
+        clearAlternativeRoutes();
+        for (let ai = 0; ai < alts.length; ai++) {
+            const color = ALT_COLORS[ai % ALT_COLORS.length];
+            const lines: L.Polyline[] = [];
+            const path = alts[ai].optimalPath;
+            for (let i = 1; i < path.length; i++) {
+                const line = new L.Polyline(
+                    [[path[i - 1].lat, path[i - 1].lon], [path[i].lat, path[i].lon]],
+                    { color, weight: 2, opacity: 0.55, dashArray: '8,5' },
+                ).addTo(map);
+                lines.push(line);
+            }
+            alternativePolylines.push(lines);
+        }
+    }
+
+    // --- Animation ---
+    function handleAnimationControl(playing: boolean, speed: number) {
+        stopAnimation();
+        if (!playing || !routeResult || routeResult.optimalPath.length < 2) return;
+
+        const path = routeResult.optimalPath;
+        let idx = 0;
+        animPlaying = true;
+
+        animMarker = new L.CircleMarker(
+            [path[0].lat, path[0].lon],
+            { radius: 8, color: '#fff', fillColor: '#ff9800', fillOpacity: 1, weight: 2 },
+        ).addTo(map);
+        animMarker.bindTooltip(formatAnimTime(path[0].time), { permanent: true, direction: 'top' });
+
+        const intervalMs = Math.max(10, Math.round(1000 / speed));
+        animTimer = setInterval(() => {
+            idx++;
+            if (idx >= path.length) {
+                stopAnimation();
+                return;
+            }
+            animMarker?.setLatLng([path[idx].lat, path[idx].lon]);
+            animMarker?.getTooltip()?.setContent(formatAnimTime(path[idx].time));
+        }, intervalMs);
+    }
+
+    function stopAnimation() {
+        if (animTimer !== null) {
+            clearInterval(animTimer);
+            animTimer = null;
+        }
+        if (animMarker) {
+            animMarker.remove();
+            animMarker = null;
+        }
+        animPlaying = false;
+    }
+
+    function formatAnimTime(ts: number): string {
+        const d = new Date(ts);
+        return `${d.getUTCMonth() + 1}/${d.getUTCDate()} ${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}Z`;
+    }
+
     function clearRouteDisplay() {
         if (optimalRoutePolyline) {
             optimalRoutePolyline.remove();
@@ -546,6 +659,8 @@
         }
         for (const l of isochroneLines) l.remove();
         isochroneLines = [];
+        clearAlternativeRoutes();
+        stopAnimation();
     }
 
     function windSpeedColor(tws: number): string {
@@ -669,7 +784,7 @@
             routePolyline.remove();
             routePolyline = null;
         }
-        clearRouteDisplay();
+        clearRouteDisplay(); // also clears alternatives, laylines, animation
         for (const p of noGoMapPolygons) p.remove();
         noGoMapPolygons = [];
         removeNoGoPreview();

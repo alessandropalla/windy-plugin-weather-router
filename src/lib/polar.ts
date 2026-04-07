@@ -80,28 +80,34 @@ export function interpolateBoatSpeed(polar: PolarDiagram, twa: number, tws: numb
 
 /**
  * Parse a standard polar CSV/POL file.
- * Format:
- *   First row: header with TWS values (first cell is "twa/tws" or empty)
- *   Subsequent rows: TWA value followed by boat speeds
+ * Supports:
+ *  - Tab, comma, or semicolon delimiters
+ *  - Space/whitespace delimiter (common in .pol files from Expedition, B&G, ORC)
+ *  - Comment lines prefixed with ! or # (Expedition .pol format)
  *
- * Accepts tab, comma, or semicolon delimiters.
+ * First row: header with TWS values (first cell is ignored label)
+ * Subsequent rows: TWA followed by boat speeds
  */
 export function parsePolarCSV(text: string, name = 'Imported Polar'): PolarDiagram {
-    const lines = text.trim().split(/\r?\n/).filter(l => l.trim().length > 0);
+    // Strip comment lines and blank lines
+    const lines = text.trim().split(/\r?\n/).filter(l => {
+        const t = l.trim();
+        return t.length > 0 && !t.startsWith('!') && !t.startsWith('#');
+    });
     if (lines.length < 2) throw new Error('Polar file must have at least a header row and one data row');
 
-    // Detect delimiter
-    const delimiters = ['\t', ';', ','];
-    let delimiter = '\t';
-    for (const d of delimiters) {
-        if (lines[0].includes(d)) {
-            delimiter = d;
-            break;
-        }
-    }
+    // Auto-detect delimiter; fall back to whitespace for .pol files
+    const splitLine = (line: string): string[] => {
+        const t = line.trim();
+        if (t.includes('\t')) return t.split('\t').map(s => s.trim()).filter(s => s.length > 0);
+        if (t.includes(';')) return t.split(';').map(s => s.trim()).filter(s => s.length > 0);
+        if (t.includes(',')) return t.split(',').map(s => s.trim()).filter(s => s.length > 0);
+        // Space-separated (standard .pol format)
+        return t.split(/\s+/).filter(s => s.length > 0);
+    };
 
-    const headerCells = lines[0].split(delimiter).map(s => s.trim());
-    // First cell is label, rest are TWS values
+    const headerCells = splitLine(lines[0]);
+    // First cell is a label (e.g. "twa/tws"), rest are TWS values
     const twsValues = headerCells.slice(1).map(Number).filter(n => !isNaN(n) && n > 0);
     if (twsValues.length === 0) throw new Error('No valid TWS values found in header');
 
@@ -109,7 +115,7 @@ export function parsePolarCSV(text: string, name = 'Imported Polar'): PolarDiagr
     const speeds: number[][] = [];
 
     for (let i = 1; i < lines.length; i++) {
-        const cells = lines[i].split(delimiter).map(s => s.trim());
+        const cells = splitLine(lines[i]);
         const twa = Number(cells[0]);
         if (isNaN(twa) || twa < 0 || twa > 180) continue;
 
@@ -118,13 +124,11 @@ export function parsePolarCSV(text: string, name = 'Imported Polar'): PolarDiagr
             const v = Number(s);
             return isNaN(v) ? 0 : Math.max(0, v);
         });
-        // Pad with zeros if row is short
         while (row.length < twsValues.length) row.push(0);
         speeds.push(row);
     }
 
     if (twaValues.length === 0) throw new Error('No valid TWA rows found');
-
     return { name, twaValues, twsValues, speeds };
 }
 
@@ -213,4 +217,23 @@ export function getExamplePolar(): PolarDiagram {
             [2.0, 3.0, 4.0, 4.7, 5.2, 5.4, 5.4, 5.0, 4.5, 3.8],
         ],
     };
+}
+
+/**
+ * Find the True Wind Angle that maximises upwind VMG (speed × cos TWA) for the given TWS.
+ * Used to compute tacking laylines to a mark.
+ */
+export function findBestUpwindTWA(polar: PolarDiagram, tws: number): number {
+    let bestVMG = 0;
+    let bestTWA = 45; // Sensible default if polar has no data
+    for (const twa of polar.twaValues) {
+        if (twa <= 0 || twa >= 90) continue; // upwind only
+        const speed = interpolateBoatSpeed(polar, twa, tws);
+        const vmg = speed * Math.cos(twa * Math.PI / 180);
+        if (vmg > bestVMG) {
+            bestVMG = vmg;
+            bestTWA = twa;
+        }
+    }
+    return bestTWA;
 }
