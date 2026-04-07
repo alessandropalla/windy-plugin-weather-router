@@ -201,7 +201,7 @@
 
     // Animation
     let animTimer: ReturnType<typeof setInterval> | null = null;
-    let animMarker: L.CircleMarker | null = null;
+    let animMarker: L.Marker | null = null;
     let animPlaying = false;
 
     // No-Go Zones
@@ -624,13 +624,22 @@
         let idx = 0;
         animPlaying = true;
 
-        animMarker = new L.CircleMarker(
+        animMarker = new L.Marker(
             [path[0].lat, path[0].lon],
-            { radius: 8, color: '#fff', fillColor: '#ff9800', fillOpacity: 1, weight: 2 },
+            {
+                icon: L.divIcon({
+                    className: '',
+                    html: '<div style="width:16px;height:16px;border-radius:50%;background:#ff9800;border:2px solid #fff;"></div>',
+                    iconSize: [16, 16],
+                    iconAnchor: [8, 8],
+                }),
+                zIndexOffset: 1000,
+            },
         ).addTo(map);
         animMarker.bindTooltip(formatAnimTime(path[0].time), { permanent: true, direction: 'top' });
+        store.set('timestamp', path[0].time);
 
-        const intervalMs = Math.max(10, Math.round(1000 / speed));
+        const intervalMs = Math.max(10, Math.round(10000 / speed));
         animTimer = setInterval(() => {
             idx++;
             if (idx >= path.length) {
@@ -639,6 +648,7 @@
             }
             animMarker?.setLatLng([path[idx].lat, path[idx].lon]);
             animMarker?.getTooltip()?.setContent(formatAnimTime(path[idx].time));
+            store.set('timestamp', path[idx].time);
         }, intervalMs);
     }
 
