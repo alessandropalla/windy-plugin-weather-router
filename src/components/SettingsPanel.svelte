@@ -1,28 +1,28 @@
 <div class="settings-panel">
-    <h3 class="size-s mb-10">Departure</h3>
+    <h3 class="size-s mb-10">{$t('settings.departure')}</h3>
     <div class="form-row mb-5">
-        <label class="size-xs">Date & Time ({useLocalTime ? 'Local' : 'UTC'}):</label>
+        <label class="size-xs">{$t('settings.dateTime', { tz: useLocalTime ? $t('settings.local') : $t('settings.utc') })}</label>
         <input class="form-control mt-3" type="datetime-local" bind:value={departureDateStr} on:change={onDepartureChange} />
     </div>
     <div class="form-row mb-10">
         <label class="size-xs">
             <input type="checkbox" checked={useLocalTime} on:change={onTimeModeChange} />
-            Use local time (browser timezone)
+            {$t('settings.useLocalTime')}
         </label>
     </div>
     <div class="form-row mb-10">
         <label class="size-xs">
             <input type="checkbox" bind:checked={optimizeDeparture} on:change={emitChange} />
-            Optimize departure time
+            {$t('settings.optimizeDeparture')}
         </label>
     </div>
     {#if optimizeDeparture}
         <div class="form-row mb-5 indent">
-            <label class="size-xs">Test window (hours):</label>
+            <label class="size-xs">{$t('settings.testWindow')}</label>
             <input class="form-control-sm" type="number" min="6" max="240" step="6" bind:value={departureWindowHours} on:change={emitChange} />
         </div>
         <div class="form-row mb-10 indent">
-            <label class="size-xs">Test every (hours):</label>
+            <label class="size-xs">{$t('settings.testEvery')}</label>
             <input class="form-control-sm" type="number" min="1" max="24" step="1" bind:value={departureStepHours} on:change={emitChange} />
         </div>
     {/if}
@@ -30,48 +30,48 @@
     <div class="form-row mb-10">
         <label class="size-xs">
             <input type="checkbox" bind:checked={useDeadline} on:change={emitChange} />
-            Set arrival deadline
+            {$t('settings.arrivalDeadline')}
         </label>
     </div>
     {#if useDeadline}
         <div class="form-row mb-10 indent">
-            <label class="size-xs">Arrive by ({useLocalTime ? 'Local' : 'UTC'}):</label>
+            <label class="size-xs">{$t('settings.arriveBy', { tz: useLocalTime ? $t('settings.local') : $t('settings.utc') })}</label>
             <input class="form-control mt-3" type="datetime-local" bind:value={deadlineDateStr} on:change={onDeadlineChange} />
         </div>
     {/if}
 
     <hr class="mb-10 mt-10" />
-    <h3 class="size-s mb-10">Motor Settings</h3>
+    <h3 class="size-s mb-10">{$t('settings.motor')}</h3>
     <div class="form-row mb-5">
         <label class="size-xs">
             <input type="checkbox" bind:checked={motorEnabled} on:change={emitChange} />
-            Allow motoring
+            {$t('settings.allowMotoring')}
         </label>
     </div>
     {#if motorEnabled}
         <div class="form-row mb-5 indent">
-            <label class="size-xs">Motor speed (kt):</label>
+            <label class="size-xs">{$t('settings.motorSpeed')}</label>
             <input class="form-control-sm" type="number" min="1" max="20" step="0.5" bind:value={motorSpeed} on:change={emitChange} />
         </div>
         <div class="form-row mb-5 indent">
-            <label class="size-xs">Fuel burn (L/h):</label>
+            <label class="size-xs">{$t('settings.fuelBurn')}</label>
             <input class="form-control-sm" type="number" min="0.1" max="100" step="0.1" bind:value={fuelBurnLph} on:change={emitChange} />
         </div>
         <div class="form-row mb-5 indent">
-            <label class="size-xs">Wind threshold (kt):</label>
+            <label class="size-xs">{$t('settings.windThreshold')}</label>
             <input class="form-control-sm" type="number" min="0" max="30" step="0.5" bind:value={windThreshold} on:change={emitChange} />
-            <span class="size-xs fg-grey">Motor when TWS below this</span>
+            <span class="size-xs fg-grey">{$t('settings.motorWhenBelow')}</span>
         </div>
         <div class="form-row mb-10 indent">
-            <label class="size-xs">Max motor hours (0=unlimited):</label>
+            <label class="size-xs">{$t('settings.maxMotorHours')}</label>
             <input class="form-control-sm" type="number" min="0" max="500" step="1" bind:value={maxMotorHours} on:change={emitChange} />
         </div>
     {/if}
 
     <hr class="mb-10 mt-10" />
-    <h3 class="size-s mb-10">Routing Parameters</h3>
+    <h3 class="size-s mb-10">{$t('settings.routing')}</h3>
     <div class="form-row mb-5">
-        <label class="size-xs">Forecast model:</label>
+        <label class="size-xs">{$t('settings.forecastModel')}</label>
         <select class="form-control-sm" bind:value={product} on:change={emitChange}>
             <option value="ecmwf">ECMWF</option>
             <option value="gfs">GFS</option>
@@ -80,64 +80,74 @@
         </select>
     </div>
     <div class="form-row mb-5">
-        <label class="size-xs">Time step (hours):</label>
+        <label class="size-xs">{$t('settings.timeStep')}</label>
         <select class="form-control-sm" bind:value={timeStepHours} on:change={emitChange}>
-            <option value={0.5}>0.5h (fine)</option>
-            <option value={1}>1h (standard)</option>
-            <option value={2}>2h (fast)</option>
-            <option value={3}>3h (very fast)</option>
+            <option value={0.5}>0.5h ({$t('settings.fine')})</option>
+            <option value={1}>1h ({$t('settings.standard')})</option>
+            <option value={2}>2h ({$t('settings.fast')})</option>
+            <option value={3}>3h ({$t('settings.veryFast')})</option>
         </select>
     </div>
     <div class="form-row mb-5">
-        <label class="size-xs">Heading resolution (°):</label>
+        <label class="size-xs">{$t('settings.headingRes')}</label>
         <select class="form-control-sm" bind:value={angularResolution} on:change={emitChange}>
-            <option value={5}>5° (precise)</option>
-            <option value={10}>10° (standard)</option>
-            <option value={15}>15° (fast)</option>
+            <option value={5}>5° ({$t('settings.precise')})</option>
+            <option value={10}>10° ({$t('settings.standard')})</option>
+            <option value={15}>15° ({$t('settings.fast')})</option>
         </select>
     </div>
     <div class="form-row mb-5">
-        <label class="size-xs">Optimization objective:</label>
+        <label class="size-xs">{$t('settings.optimization')}</label>
         <select class="form-control-sm" bind:value={optimizationMode} on:change={emitChange} disabled={useDeadline}>
-            <option value={'min-time'}>Fastest arrival (default)</option>
-            <option value={'min-motoring'}>Least motoring</option>
-            <option value={'comfort-balanced'}>Balanced comfort</option>
-            <option value={'min-max-wind'}>Lower max wind</option>
-            <option value={'min-wave-exposure'}>Lower wave exposure</option>
+            <option value={'min-time'}>{$t('settings.fastest')}</option>
+            <option value={'min-motoring'}>{$t('settings.leastMotoring')}</option>
+            <option value={'comfort-balanced'}>{$t('settings.balancedComfort')}</option>
+            <option value={'min-max-wind'}>{$t('settings.lowerMaxWind')}</option>
+            <option value={'min-wave-exposure'}>{$t('settings.lowerWaveExposure')}</option>
         </select>
         {#if useDeadline}
-            <span class="size-xs fg-grey">Arrival deadline mode uses fastest route that still meets the deadline.</span>
+            <span class="size-xs fg-grey">{$t('settings.deadlineNote')}</span>
         {/if}
     </div>
     <div class="form-row mb-10">
-        <label class="size-xs">Max duration (hours):</label>
+        <label class="size-xs">{$t('settings.maxDuration')}</label>
         <input class="form-control-sm" type="number" min="12" max="480" step="12" bind:value={maxDurationHours} on:change={emitChange} />
     </div>
     <div class="form-row mb-10">
-        <label class="size-xs">Max wind limit (kt):</label>
+        <label class="size-xs">{$t('settings.maxWind')}</label>
         <input class="form-control-sm" type="number" min="0" max="80" step="1" bind:value={maxWindLimitKt} on:change={emitChange} />
-        <span class="size-xs fg-grey">Default 25 kt, set 0 to disable.</span>
+        <span class="size-xs fg-grey">{$t('settings.maxWindNote')}</span>
     </div>
     <div class="form-row mb-5">
         <label class="size-xs">
             <input type="checkbox" bind:checked={useWaveLimit} on:change={emitChange} />
-            Max wave height limit
+            {$t('settings.maxWaveLimit')}
         </label>
     </div>
     {#if useWaveLimit}
         <div class="form-row mb-10 indent">
-            <label class="size-xs">Max wave height (m):</label>
+            <label class="size-xs">{$t('settings.maxWaveHeight')}</label>
             <input class="form-control-sm" type="number" min="0.5" max="15" step="0.5" bind:value={maxWaveHeightM} on:change={emitChange} />
         </div>
     {/if}
 
     <hr class="mb-10 mt-10" />
-    <h3 class="size-s mb-10">Route Alternatives</h3>
+    <h3 class="size-s mb-10">{$t('settings.alternatives')}</h3>
     <div class="form-row mb-5">
         <label class="size-xs">
             <input type="checkbox" bind:checked={routeAlternatives} on:change={emitChange} />
-            Compute alternative routes
+            {$t('settings.computeAlternatives')}
         </label>
+    </div>
+
+    <hr class="mb-10 mt-10" />
+    <h3 class="size-s mb-10">{$t('settings.language')}</h3>
+    <div class="form-row mb-5">
+        <select class="form-control-sm" value={$locale} on:change={onLocaleChange}>
+            {#each Object.entries(SUPPORTED_LOCALES) as [code, label]}
+                <option value={code}>{label}</option>
+            {/each}
+        </select>
     </div>
 </div>
 
@@ -146,6 +156,7 @@
     import type { RouteConfig, OptimizationMode } from '../types/routing';
     import type { MotorConfig } from '../types/polar';
     import { DEFAULT_MOTOR_CONFIG } from '../types/polar';
+    import { t, locale, setLocale, SUPPORTED_LOCALES } from '../lib/i18n';
 
     const dispatch = createEventDispatcher<{ change: Partial<RouteConfig> & { motor: MotorConfig } }>();
     export let value: (Partial<RouteConfig> & { motor?: Partial<MotorConfig> }) | null = null;
@@ -293,6 +304,10 @@
                 maxMotorHours,
             },
         });
+    }
+
+    function onLocaleChange(e: Event) {
+        setLocale((e.target as HTMLSelectElement).value);
     }
 
     /** Export current settings as a RouteConfig-compatible object */

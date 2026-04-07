@@ -6,18 +6,18 @@
             class:button--variant-ghost={!addingMode}
             on:click={toggleAddMode}
         >
-            {addingMode ? '✓ Click map to add waypoint' : '+ Add Waypoint'}
+            {addingMode ? $t('wp.addMode') : $t('wp.add')}
         </button>
         {#if waypoints.length > 1}
-            <button class="button button--variant-ghost size-xs ml-5" on:click={reverseRoute}>⇄ Reverse</button>
+            <button class="button button--variant-ghost size-xs ml-5" on:click={reverseRoute}>{$t('wp.reverse')}</button>
         {/if}
         {#if waypoints.length > 0}
-            <button class="button button--variant-ghost size-xs ml-5" on:click={clearAll}>✕ Clear</button>
+            <button class="button button--variant-ghost size-xs ml-5" on:click={clearAll}>{$t('wp.clear')}</button>
         {/if}
     </div>
 
     {#if waypoints.length === 0}
-        <p class="size-xs fg-grey">No waypoints. Click the button above, then click on the map.</p>
+        <p class="size-xs fg-grey">{$t('wp.empty')}</p>
     {:else}
         <div class="waypoint-list">
             {#each waypoints as wp, i}
@@ -43,8 +43,8 @@
         </div>
         {#if waypoints.length > 1}
             <div class="route-summary mt-10 size-xs">
-                <strong>Total: {totalDistance.toFixed(1)} nm</strong>
-                ({waypoints.length} waypoints, {waypoints.length - 1} legs)
+                <strong>{$t('wp.total', { dist: totalDistance.toFixed(1) })}</strong>
+                {$t('wp.summary', { wpts: waypoints.length, legs: waypoints.length - 1 })}
             </div>
         {/if}
     {/if}
@@ -54,6 +54,7 @@
     import { createEventDispatcher } from 'svelte';
     import type { Waypoint } from '../types/routing';
     import { totalRouteDistance, legDistances, formatLatLon } from '../lib/waypoints';
+    import { t } from '../lib/i18n';
 
     const dispatch = createEventDispatcher<{
         change: Waypoint[];

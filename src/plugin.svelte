@@ -12,16 +12,16 @@
 
     <!-- Tab navigation -->
     <div class="main-tabs mb-10">
-        <span class="main-tab clickable" class:main-tab--active={activeTab === 'route'} on:click={() => activeTab = 'route'}>⛵ Route</span>
-        <span class="main-tab clickable" class:main-tab--active={activeTab === 'polars'} on:click={() => activeTab = 'polars'}>📊 Polars</span>
-        <span class="main-tab clickable" class:main-tab--active={activeTab === 'settings'} on:click={() => activeTab = 'settings'}>⚙ Settings</span>
-        <span class="main-tab clickable" class:main-tab--active={activeTab === 'results'} on:click={() => activeTab = 'results'}>📈 Results</span>
+        <span class="main-tab clickable" class:main-tab--active={activeTab === 'route'} on:click={() => activeTab = 'route'}>{$t('tab.route')}</span>
+        <span class="main-tab clickable" class:main-tab--active={activeTab === 'polars'} on:click={() => activeTab = 'polars'}>{$t('tab.polars')}</span>
+        <span class="main-tab clickable" class:main-tab--active={activeTab === 'settings'} on:click={() => activeTab = 'settings'}>{$t('tab.settings')}</span>
+        <span class="main-tab clickable" class:main-tab--active={activeTab === 'results'} on:click={() => activeTab = 'results'}>{$t('tab.results')}</span>
     </div>
 
     <!-- Tab content -->
     {#if activeTab === 'route'}
         <p class="size-xs fg-grey mb-10">
-            Click "+ Add Waypoint", then left-click on the map to place points.
+            {$t('route.hint')}
         </p>
         <WaypointPanel
             bind:this={waypointPanel}
@@ -34,23 +34,22 @@
         <hr class="mt-15 mb-15" />
 
         <!-- No-Go Zones -->
-        <h4 class="size-s mb-5">🚫 No-Go Zones</h4>
+        <h4 class="size-s mb-5">{$t('nogo.title')}</h4>
         {#if drawingNoGoZone}
             <p class="size-xs fg-grey mb-5">
-                Click on the map to add vertices ({currentNoGoVertices.length} placed).
-                Need at least 3 points.
+                {$t('nogo.drawing', { count: currentNoGoVertices.length })}
             </p>
             <div class="nogo-btn-row mb-10">
                 <button class="button button--variant-green size-xs" disabled={currentNoGoVertices.length < 3} on:click={finishNoGoZone}>
-                    ✓ Finish Zone
+                    {$t('nogo.finish')}
                 </button>
                 <button class="button size-xs" on:click={cancelNoGoZone}>
-                    ✕ Cancel
+                    {$t('nogo.cancel')}
                 </button>
             </div>
         {:else}
             <button class="button size-xs mb-5" on:click={startDrawingNoGoZone}>
-                + Draw No-Go Zone
+                {$t('nogo.draw')}
             </button>
         {/if}
 
@@ -58,12 +57,12 @@
             <div class="nogo-list mb-10">
                 {#each noGoZones as zone}
                     <div class="nogo-item">
-                        <span class="size-xs nogo-name">🚫 {zone.name} ({zone.vertices.length} pts)</span>
+                        <span class="size-xs nogo-name">🚫 {zone.name} ({$t('nogo.pts', { count: zone.vertices.length })})</span>
                         <button class="nogo-remove" on:click={() => removeNoGoZone(zone.id)} title="Remove zone">✕</button>
                     </div>
                 {/each}
                 <button class="button size-xs mt-5" on:click={clearAllNoGoZones}>
-                    Clear All Zones
+                    {$t('nogo.clearAll')}
                 </button>
             </div>
         {/if}
@@ -77,15 +76,15 @@
             disabled={computing}
             on:click={runRouting}
         >
-            {computing ? 'Computing...' : 'Compute Weather Route'}
+            {computing ? $t('btn.computing') : $t('btn.compute')}
         </button>
 
         {#if !canCompute && !computing}
             <p class="size-xs fg-grey mt-5">
                 {#if waypoints.length < 2}
-                    Add at least 2 waypoints to compute a route.
+                    {$t('compute.noWaypoints')}
                 {:else if !currentPolar}
-                    Select a polar diagram in the Polars tab.
+                    {$t('compute.noPolar')}
                 {/if}
             </p>
         {/if}
@@ -150,6 +149,7 @@
     import { saveWaypoints, loadWaypoints } from './lib/waypoints';
 
     import type { LatLon } from '@windy/interfaces';
+    import { t, tGet, initLocale, formatShortDate } from './lib/i18n';
 
     const { title, name } = config;
     const SETTINGS_STORAGE_KEY = 'windy-router-settings';
@@ -431,18 +431,18 @@
     // --- Routing ---
     async function runRouting() {
         if (waypoints.length < 2) {
-            errorMsg = 'Please add at least 2 waypoints before computing.';
+            errorMsg = tGet('error.noWaypoints');
             return;
         }
 
         if (!currentPolar) {
-            errorMsg = 'Please select or import a polar in the Polars tab before computing.';
+            errorMsg = tGet('error.noPolar');
             activeTab = 'polars';
             return;
         }
 
         computing = true;
-        progressMsg = 'Fetching wind data...';
+        progressMsg = tGet('progress.fetchingWind');
         errorMsg = '';
         routeResult = null;
         clearRouteDisplay();
@@ -462,22 +462,22 @@
                 60,
                 0.5,
                 (fetched, total) => {
-                    progressMsg = `Fetching wind: ${fetched}/${total} grid points...`;
+                    progressMsg = tGet('progress.fetchingWindN', { fetched, total });
                 },
             );
 
             // Fetch elevation grid for land avoidance
-            progressMsg = 'Fetching elevation data for land avoidance...';
+            progressMsg = tGet('progress.fetchingElev');
             const elevationGrid: ElevationGrid = await fetchElevationGrid(
                 waypoints,
                 60,
                 0.1,
                 (fetched, total) => {
-                    progressMsg = `Fetching elevation: ${fetched}/${total} grid points...`;
+                    progressMsg = tGet('progress.fetchingElevN', { fetched, total });
                 },
             );
 
-            progressMsg = 'Running isochrone algorithm...';
+            progressMsg = tGet('progress.isochrone');
 
             // Build full config
             const routeConfig: RouteConfig = {
@@ -501,7 +501,7 @@
             };
 
             // Primary route
-            progressMsg = 'Running isochrone algorithm...';
+            progressMsg = tGet('progress.isochrone');
             const result = await runRoutingTask(routeConfig, windGrid, elevationGrid, p => {
                 progressMsg = p.message;
             });
@@ -518,7 +518,7 @@
             if (routeConfig.routeAlternatives) {
                 const altModes = ALT_OBJECTIVE_MODES.filter(m => m !== result.optimizationMode);
                 for (const altMode of altModes) {
-                    progressMsg = `Computing alternative (${altMode})...`;
+                    progressMsg = tGet('progress.alternative', { mode: altMode });
                     try {
                         // Alternatives isolate objective differences.
                         // When departure optimization is enabled, each objective gets its own best departure.
@@ -550,7 +550,7 @@
             progressMsg = '';
             activeTab = 'results';
         } catch (e) {
-            errorMsg = `Routing failed: ${(e as Error).message}`;
+            errorMsg = tGet('error.routingFailed', { msg: (e as Error).message });
             progressMsg = '';
         } finally {
             computing = false;
@@ -579,11 +579,11 @@
 
             segment.bindPopup(
                 `<b>${new Date(curr.time).toUTCString()}</b><br/>` +
-                `Speed: ${curr.boatSpeed.toFixed(1)} kt<br/>` +
-                `Wind: ${curr.tws.toFixed(0)} kt @ ${curr.twd.toFixed(0)}°<br/>` +
-                `Waves: ${curr.waveHeight.toFixed(1)} m @ ${curr.waveDir.toFixed(0)}° (${curr.wavePeriod.toFixed(1)} s)<br/>` +
-                `TWA: ${curr.twa.toFixed(0)}°<br/>` +
-                `${curr.isMotoring ? '⚙ Motoring' : '⛵ Sailing'}`,
+                `${tGet('popup.speed')}: ${curr.boatSpeed.toFixed(1)} kt<br/>` +
+                `${tGet('popup.wind')}: ${curr.tws.toFixed(0)} kt @ ${curr.twd.toFixed(0)}°<br/>` +
+                `${tGet('popup.waves')}: ${curr.waveHeight.toFixed(1)} m @ ${curr.waveDir.toFixed(0)}° (${curr.wavePeriod.toFixed(1)} s)<br/>` +
+                `${tGet('popup.twa')}: ${curr.twa.toFixed(0)}°<br/>` +
+                `${curr.isMotoring ? tGet('popup.motoring') : tGet('popup.sailing')}`,
             );
 
             isochroneLines.push(segment); // reuse array for cleanup
@@ -767,7 +767,7 @@
 
     function exportRoute(format: 'gpx' | 'csv' | 'geojson') {
         if (!routeResult || routeResult.optimalPath.length < 2) {
-            errorMsg = 'No route available to export yet.';
+            errorMsg = tGet('error.noRoute');
             return;
         }
 
@@ -906,6 +906,7 @@
     };
 
     onMount(() => {
+        initLocale();
         singleclick.on(name, onMapClick);
         drawNoGoZonesOnMap(); // render zones already loaded by onopen
     });

@@ -2,6 +2,7 @@
     import { generateBoatClassPolar, scalePolarByLength, type BoatClass } from '../lib/polar';
     import type { BoatConfig } from '../types/polar';
     import { DEFAULT_MOTOR_CONFIG } from '../types/polar';
+    import { t } from '../lib/i18n';
 
     export let onComplete: (config: BoatConfig) => void;
     export let onCancel: () => void;
@@ -13,48 +14,22 @@
     let hasSpinnaker = false;
     let motorEnabled = false;
 
-    const boatClasses: { value: BoatClass; label: string; description: string }[] = [
-        {
-            value: 'dinghy',
-            label: 'Small Dinghy',
-            description: 'Fast, light, responsive sailing'
-        },
-        {
-            value: 'dayboat',
-            label: 'Day Boat',
-            description: 'Good all-around performance'
-        },
-        {
-            value: 'cruiser',
-            label: 'Cruiser',
-            description: 'Comfortable, steady performance'
-        },
-        {
-            value: 'race-cruiser',
-            label: 'Race Cruiser',
-            description: 'Fast racing with cruising comfort'
-        },
-        {
-            value: 'ior-maxi',
-            label: 'IOR Maxi',
-            description: 'Large offshore racer'
-        },
-        {
-            value: 'tp52',
-            label: 'TP52',
-            description: 'Modern high-tech racer'
-        },
-        {
-            value: 'foiler',
-            label: 'Foiler',
-            description: 'Foiling yacht - extreme speeds'
-        },
-        {
-            value: 'multihull',
-            label: 'Multihull',
-            description: 'Catamaran or trimaran'
-        }
+    const boatClassValues: BoatClass[] = [
+        'dinghy',
+        'dayboat',
+        'cruiser',
+        'race-cruiser',
+        'ior-maxi',
+        'tp52',
+        'foiler',
+        'multihull',
     ];
+
+    $: boatClasses = boatClassValues.map(value => ({
+        value,
+        label: $t(`boatClass.${value}.label`),
+        description: $t(`boatClass.${value}.desc`),
+    }));
 
     function handleComplete() {
         let polar = generateBoatClassPolar(boatClass);
@@ -113,15 +88,15 @@
 
 <div class="wizard">
     <div class="wizard-header">
-        <h2>Boat Configuration Wizard</h2>
-        <p>Step {step} of 3</p>
+        <h2>{$t('wizard.title')}</h2>
+        <p>{$t('wizard.step', { n: step })}</p>
     </div>
 
     <div class="wizard-body">
         {#if step === 1}
             <div class="step">
-                <h3>Select Boat Class</h3>
-                <p>Choose the type of boat that best matches yours:</p>
+                <h3>{$t('wizard.selectClass')}</h3>
+                <p>{$t('wizard.selectClassHint')}</p>
 
                 <div class="boat-classes">
                     {#each boatClasses as bc}
@@ -144,20 +119,20 @@
 
         {#if step === 2}
             <div class="step">
-                <h3>Customize Boat Details</h3>
+                <h3>{$t('wizard.details')}</h3>
 
                 <div class="form-group">
-                    <label for="boatName">Boat Name (optional):</label>
+                    <label for="boatName">{$t('wizard.boatName')}</label>
                     <input
                         type="text"
                         id="boatName"
                         bind:value={boatName}
-                        placeholder="e.g., My Sailing Boat"
+                        placeholder={$t('wizard.namePlaceholder')}
                     />
                 </div>
 
                 <div class="form-group">
-                    <label for="boatLength">Boat Length (feet):</label>
+                    <label for="boatLength">{$t('wizard.boatLength')}</label>
                     <input
                         type="number"
                         id="boatLength"
@@ -167,30 +142,27 @@
                         step="1"
                     />
                     <div class="length-info">
-                        Length affects performance scaling. Default is 35 feet.
+                        {$t('wizard.lengthInfo')}
                     </div>
                 </div>
 
                 <div class="form-group checkbox">
                     <label>
                         <input type="checkbox" bind:checked={hasSpinnaker} />
-                        Has Spinnaker (improve downwind performance)
+                        {$t('wizard.hasSpinnaker')}
                     </label>
                 </div>
 
                 <div class="form-group checkbox">
                     <label>
                         <input type="checkbox" bind:checked={motorEnabled} />
-                        Has Motor (for low wind conditions)
+                        {$t('wizard.hasMotor')}
                     </label>
                 </div>
 
                 {#if motorEnabled}
                     <div class="motor-info">
-                        <p>
-                            Motor will be enabled for wind speeds below 4 knots with a cruising speed
-                            of 5 knots.
-                        </p>
+                        <p>{$t('wizard.motorInfo')}</p>
                     </div>
                 {/if}
             </div>
@@ -198,48 +170,48 @@
 
         {#if step === 3}
             <div class="step">
-                <h3>Summary</h3>
+                <h3>{$t('wizard.summary')}</h3>
 
                 <div class="summary">
                     <div class="summary-item">
-                        <span class="label">Boat Class:</span>
+                        <span class="label">{$t('wizard.summaryClass')}</span>
                         <span class="value">{boatClasses.find(b => b.value === boatClass)?.label}</span>
                     </div>
                     <div class="summary-item">
-                        <span class="label">Boat Name:</span>
-                        <span class="value">{boatName || '(Using class default name)'}</span>
+                        <span class="label">{$t('wizard.summaryName')}</span>
+                        <span class="value">{boatName || $t('wizard.defaultName')}</span>
                     </div>
                     <div class="summary-item">
-                        <span class="label">Boat Length:</span>
-                        <span class="value">{boatLength} ft</span>
+                        <span class="label">{$t('wizard.summaryLength')}</span>
+                        <span class="value">{boatLength} {$t('wizard.ft')}</span>
                     </div>
                     <div class="summary-item">
-                        <span class="label">Spinnaker:</span>
-                        <span class="value">{hasSpinnaker ? 'Yes' : 'No'}</span>
+                        <span class="label">{$t('wizard.summarySpinnaker')}</span>
+                        <span class="value">{hasSpinnaker ? $t('wizard.yes') : $t('wizard.no')}</span>
                     </div>
                     <div class="summary-item">
-                        <span class="label">Motor:</span>
-                        <span class="value">{motorEnabled ? 'Enabled' : 'Disabled'}</span>
+                        <span class="label">{$t('wizard.summaryMotor')}</span>
+                        <span class="value">{motorEnabled ? $t('wizard.enabled') : $t('wizard.disabled')}</span>
                     </div>
                 </div>
 
                 <p style="margin-top: 1rem; color: #666; font-size: 0.9em;">
-                    Click "Create Boat" to save this configuration and start routing!
+                    {$t('wizard.createNote')}
                 </p>
             </div>
         {/if}
     </div>
 
     <div class="wizard-footer">
-        <button on:click={onCancel} class="btn btn-secondary">Cancel</button>
+        <button on:click={onCancel} class="btn btn-secondary">{$t('wizard.cancel')}</button>
         <div class="button-group">
             {#if step > 1}
-                <button on:click={handlePrev} class="btn btn-secondary">← Back</button>
+                <button on:click={handlePrev} class="btn btn-secondary">{$t('wizard.back')}</button>
             {/if}
             {#if step < 3}
-                <button on:click={handleNext} class="btn btn-primary">Next →</button>
+                <button on:click={handleNext} class="btn btn-primary">{$t('wizard.next')}</button>
             {:else}
-                <button on:click={handleComplete} class="btn btn-primary">Create Boat</button>
+                <button on:click={handleComplete} class="btn btn-primary">{$t('wizard.create')}</button>
             {/if}
         </div>
     </div>

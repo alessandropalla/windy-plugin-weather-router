@@ -1,10 +1,10 @@
 <div class="polar-editor">
     <div class="polar-tabs mb-10">
-        <span class="tab clickable" class:tab--active={activeTab === 'wizard'} on:click={() => activeTab = 'wizard'}>✨ Wizard</span>
-        <span class="tab clickable" class:tab--active={activeTab === 'manage'} on:click={() => activeTab = 'manage'}>Manage</span>
-        <span class="tab clickable" class:tab--active={activeTab === 'import'} on:click={() => activeTab = 'import'}>Import</span>
-        <span class="tab clickable" class:tab--active={activeTab === 'edit'} on:click={() => activeTab = 'edit'}>Edit</span>
-        <span class="tab clickable" class:tab--active={activeTab === 'plot'} on:click={() => activeTab = 'plot'}>Plot</span>
+        <span class="tab clickable" class:tab--active={activeTab === 'wizard'} on:click={() => activeTab = 'wizard'}>{$t('polar.wizard')}</span>
+        <span class="tab clickable" class:tab--active={activeTab === 'manage'} on:click={() => activeTab = 'manage'}>{$t('polar.manage')}</span>
+        <span class="tab clickable" class:tab--active={activeTab === 'import'} on:click={() => activeTab = 'import'}>{$t('polar.import')}</span>
+        <span class="tab clickable" class:tab--active={activeTab === 'edit'} on:click={() => activeTab = 'edit'}>{$t('polar.edit')}</span>
+        <span class="tab clickable" class:tab--active={activeTab === 'plot'} on:click={() => activeTab = 'plot'}>{$t('polar.plot')}</span>
     </div>
 
     {#if activeTab === 'wizard'}
@@ -15,43 +15,43 @@
 
     {:else if activeTab === 'manage'}
         <div class="mb-10">
-            <label class="size-s">Select Polar:</label>
+            <label class="size-s">{$t('polar.select')}</label>
             <select class="form-control mt-5" bind:value={selectedPolarName} on:change={onSelectPolar}>
-                <option value="">-- none --</option>
+                <option value="">{$t('polar.none')}</option>
                 {#each polarNames as name}
                     <option value={name}>{name}</option>
                 {/each}
             </select>
         </div>
         <div class="button-row mb-10">
-            <button class="button button--variant-ghost size-xs" on:click={createNew}>New</button>
-            <button class="button button--variant-ghost size-xs" on:click={loadExample}>Load Example</button>
+            <button class="button button--variant-ghost size-xs" on:click={createNew}>{$t('polar.new')}</button>
+            <button class="button button--variant-ghost size-xs" on:click={loadExample}>{$t('polar.loadExample')}</button>
             {#if selectedPolarName}
-                <button class="button button--variant-ghost size-xs" on:click={renameSelected}>Rename</button>
-                <button class="button button--variant-ghost size-xs" on:click={deleteSelected}>Delete</button>
-                <button class="button button--variant-ghost size-xs" on:click={exportCSV}>Export CSV</button>
+                <button class="button button--variant-ghost size-xs" on:click={renameSelected}>{$t('polar.rename')}</button>
+                <button class="button button--variant-ghost size-xs" on:click={deleteSelected}>{$t('polar.delete')}</button>
+                <button class="button button--variant-ghost size-xs" on:click={exportCSV}>{$t('polar.exportCSV')}</button>
             {/if}
         </div>
         {#if polar}
             <div class="size-xs fg-grey mt-5">
-                {polar.twaValues.length} TWA × {polar.twsValues.length} TWS breakpoints
+                {$t('polar.breakpoints', { twa: polar.twaValues.length, tws: polar.twsValues.length })}
             </div>
         {/if}
 
     {:else if activeTab === 'import'}
         <div class="mb-10">
-            <label class="size-s">Boat Name:</label>
+            <label class="size-s">{$t('polar.boatName')}</label>
             <input class="form-control mt-5" type="text" bind:value={importName} placeholder="e.g. J/105" />
         </div>
         <div class="mb-10">
-            <label class="size-s">Import .pol / .csv file:</label>
+            <label class="size-s">{$t('polar.importFile')}</label>
             <input class="mt-5" type="file" accept=".pol,.csv,.txt,.tsv" on:change={onFileImport} />
         </div>
         <div class="mb-10">
-            <label class="size-s">Or paste polar data:</label>
-            <textarea class="form-control mt-5" rows="8" bind:value={pasteText} placeholder="TWA/TWS  6  8  10  12  ...&#10;30       3.2  4.1  5.0  ..."></textarea>
+            <label class="size-s">{$t('polar.pasteData')}</label>
+            <textarea class="form-control mt-5" rows="8" bind:value={pasteText} placeholder={$t('polar.pastePlaceholder')}></textarea>
         </div>
-        <button class="button button--variant-orange size-xs" on:click={importFromPaste}>Import Pasted Data</button>
+        <button class="button button--variant-orange size-xs" on:click={importFromPaste}>{$t('polar.importPasted')}</button>
         {#if importError}
             <div class="error-msg mt-5 size-xs">{importError}</div>
         {/if}
@@ -93,14 +93,14 @@
                 </table>
             </div>
         {:else}
-            <p class="size-s fg-grey">No polar loaded. Select or create one in Manage tab.</p>
+            <p class="size-s fg-grey">{$t('polar.noLoaded')}</p>
         {/if}
 
     {:else if activeTab === 'plot'}
         {#if polar}
             <svg bind:this={svgEl} class="polar-svg" viewBox="-120 -120 240 240"></svg>
         {:else}
-            <p class="size-s fg-grey">No polar loaded.</p>
+            <p class="size-s fg-grey">{$t('polar.noLoadedShort')}</p>
         {/if}
     {/if}
 </div>
@@ -119,6 +119,7 @@
         polarToCSV,
     } from '../lib/polar';
     import BoatWizard from './BoatWizard.svelte';
+    import { t, tGet } from '../lib/i18n';
 
     const dispatch = createEventDispatcher<{ change: PolarDiagram | null }>();
 
@@ -175,7 +176,7 @@
     }
 
     function createNew() {
-        const name = prompt('Polar name:') || 'Untitled';
+        const name = prompt(tGet('polar.promptName')) || 'Untitled';
         polar = createEmptyPolar(name);
         savePolar(polar);
         selectedPolarName = name;
@@ -192,7 +193,7 @@
     }
 
     function deleteSelected() {
-        if (selectedPolarName && confirm(`Delete polar "${selectedPolarName}"?`)) {
+        if (selectedPolarName && confirm(tGet('polar.confirmDelete', { name: selectedPolarName }))) {
             deletePolar(selectedPolarName);
             polar = null;
             selectedPolarName = '';
@@ -204,7 +205,7 @@
 
     function renameSelected() {
         if (!polar || !selectedPolarName) return;
-        const nextName = (prompt('New polar name:', selectedPolarName) || '').trim();
+        const nextName = (prompt(tGet('polar.promptNewName'), selectedPolarName) || '').trim();
         if (!nextName || nextName === selectedPolarName) return;
 
         deletePolar(selectedPolarName);
@@ -243,7 +244,7 @@
                 activeTab = 'edit';
                 dispatch('change', polar);
             } catch (err) {
-                importError = `Parse error: ${(err as Error).message}`;
+                importError = tGet('polar.errorParse', { msg: (err as Error).message });
             }
         };
         reader.readAsText(file);
@@ -252,7 +253,7 @@
     function importFromPaste() {
         importError = '';
         if (!pasteText.trim()) {
-            importError = 'Paste some polar data first';
+            importError = tGet('polar.errorPasteEmpty');
             return;
         }
         try {
@@ -264,7 +265,7 @@
             activeTab = 'edit';
             dispatch('change', polar);
         } catch (err) {
-            importError = `Parse error: ${(err as Error).message}`;
+            importError = tGet('polar.errorParse', { msg: (err as Error).message });
         }
     }
 

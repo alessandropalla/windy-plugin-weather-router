@@ -85,14 +85,32 @@ src/
     nogozones.ts          # No-go zone polygon intersection
     waypoints.ts          # Waypoint persistence helpers
     geo.ts                # Geodesic distance, bearing, TWA utilities
+    i18n.ts               # Internationalisation — locale store, dictionaries (en/it), t() helper
   types/
     routing.ts            # Route, waypoint, isochrone, metrics types
     polar.ts              # Polar diagram and motor config types
 ```
 
+## Language / Lingua
+
+The plugin UI is fully translated into **English** (default) and **Italian**.
+
+The active language is automatically detected from your browser's language setting (`navigator.language`). Once you change the language manually in the **Settings** tab → **Language** selector, the selection is persisted in `localStorage` and used on subsequent opens.
+
+To add a new language:
+1. Open `src/lib/i18n.ts`.
+2. Copy the `en` dictionary object and create a new key for your language code (e.g. `fr`, `de`).
+3. Translate each string value.
+4. Add the locale code and display name to `SUPPORTED_LOCALES` (e.g. `{ en: 'English', it: 'Italiano', fr: 'Français' }`).
+
+No build-time changes are required; the language selector in Settings will appear automatically.
+
 ---
 
 ## CHANGELOG
+
+-   0.2.0
+    -   **Internationalisation (i18n):** English and Italian UI translations; language selector in Settings tab; locale auto-detected from browser, persisted in `localStorage`; locale-aware date format (DD/MM for Italian, MM/DD for English)
 
 -   0.1.0
     -   Initial release of the Weather Router plugin
