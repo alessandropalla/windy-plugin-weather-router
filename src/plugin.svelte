@@ -102,7 +102,8 @@
     import { DEFAULT_MOTOR_CONFIG } from './types/polar';
     import type { Waypoint, RouteConfig, RouteResult, IsochronePoint } from './types/routing';
     import type { WindGrid } from './lib/windgrid';
-    import { fetchWindGrid } from './lib/windgrid';
+    import { fetchWindGrid, fetchElevationGrid } from './lib/windgrid';
+    import type { ElevationGrid } from './lib/windgrid';
     import { computeRoute, computeRouteWithDepartureOptimization } from './lib/routing';
     import { saveWaypoints, loadWaypoints } from './lib/waypoints';
 
@@ -277,6 +278,17 @@
                 },
             );
 
+            // Fetch elevation grid for land avoidance
+            progressMsg = 'Fetching elevation data for land avoidance...';
+            const elevationGrid: ElevationGrid = await fetchElevationGrid(
+                waypoints,
+                60,
+                0.1,
+                (fetched, total) => {
+                    progressMsg = `Fetching elevation: ${fetched}/${total} grid points...`;
+                },
+            );
+
             progressMsg = 'Running isochrone algorithm...';
 
             // Build full config
@@ -304,10 +316,10 @@
                         const r = routeConfig.optimizeDeparture
                             ? computeRouteWithDepartureOptimization(waypoints, routeConfig, windGrid, p => {
                                   progressMsg = p.message;
-                              })
+                              }, elevationGrid)
                             : computeRoute(waypoints, routeConfig, windGrid, p => {
                                   progressMsg = p.message;
-                              });
+                              }, elevationGrid);
                         resolve(r);
                     } catch (e) {
                         reject(e);

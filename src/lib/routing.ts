@@ -7,6 +7,7 @@ import {
     computeTWA,
     normalizeAngle,
 } from './geo';
+import { isPointOnLand, isLegOverLand } from './windgrid';
 import type { MotorConfig } from '../types/polar';
 import type {
     Waypoint,
@@ -18,7 +19,7 @@ import type {
     LegMetrics,
     RoutingProgress,
 } from '../types/routing';
-import type { WindGrid } from './windgrid';
+import type { WindGrid, ElevationGrid } from './windgrid';
 
 const ARRIVAL_RADIUS_NM = 2; // Consider arrived when within this radius of destination
 
@@ -36,6 +37,7 @@ export function computeRoute(
     config: RouteConfig,
     windGrid: WindGrid,
     onProgress?: (progress: RoutingProgress) => void,
+    elevationGrid?: ElevationGrid,
 ): RouteResult {
     if (waypoints.length < 2) {
         throw new Error('Need at least 2 waypoints');
@@ -137,6 +139,22 @@ export function computeRoute(
                 // Check bounds (simple sanity check)
                 if (Math.abs(newLat) > 85) {
                     continue;
+                }
+
+                // Land avoidance: skip if destination or leg crosses land,
+                // unless we are close to a waypoint (ports may be near coast)
+                if (elevationGrid) {
+                    const nearWaypoint = waypoints.some(
+                        wp => distanceNm(newLat, newLon, wp.lat, wp.lon) <= ARRIVAL_RADIUS_NM,
+                    );
+                    if (!nearWaypoint) {
+                        if (isPointOnLand(newLat, newLon, elevationGrid)) {
+                            continue;
+                        }
+                        if (isLegOverLand(parent.lat, parent.lon, newLat, newLon, elevationGrid)) {
+                            continue;
+                        }
+                    }
                 }
 
                 const newPoint: IsochronePoint = {
@@ -247,9 +265,10 @@ export function computeRouteWithDepartureOptimization(
     config: RouteConfig,
     windGrid: WindGrid,
     onProgress?: (progress: RoutingProgress) => void,
+    elevationGrid?: ElevationGrid,
 ): RouteResult {
     if (!config.optimizeDeparture) {
-        return computeRoute(waypoints, config, windGrid, onProgress);
+        return computeRoute(waypoints, config, windGrid, onProgress, elevationGrid);
     }
 
     const windowMs = config.departureWindowHours * 3600 * 1000;
@@ -276,7 +295,7 @@ export function computeRouteWithDepartureOptimization(
         });
 
         try {
-            const result = computeRoute(waypoints, trialConfig, windGrid);
+            const result = computeRoute(waypoints, trialConfig, windGrid, undefined, elevationGrid);
 
             if (deadlineMode) {
                 // In deadline mode, successful routes already satisfy the deadline.
@@ -306,6 +325,7 @@ export function computeRouteWithDepartureOptimization(
             { ...config, optimizeDeparture: false },
             windGrid,
             onProgress,
+            elevationGrid,
         );
     }
 

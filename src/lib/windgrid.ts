@@ -1,4 +1,4 @@
-import { getPointForecastData } from '@windy/fetch';
+import { getPointForecastData, getElevation } from '@windy/fetch';
 import { msToKnots, distanceNm } from './geo';
 import type { DataHash, WeatherDataPayload } from '@windy/interfaces.d';
 import type { HttpPayload } from '@windy/http.d';
@@ -332,4 +332,145 @@ function findNearestPoints(
     }));
     withDist.sort((a, b) => a.dist - b.dist);
     return withDist.slice(0, n);
+}
+
+// ─── Elevation Grid for Land Avoidance ───────────────────────────────────────
+
+export interface ElevationGrid {
+    /** 2D array of elevation values in meters AMSL: data[latIdx][lonIdx] */
+    data: number[][];
+    minLat: number;
+    minLon: number;
+    latStep: number;
+    lonStep: number;
+    latCount: number;
+    lonCount: number;
+}
+
+const LAND_ELEVATION_THRESHOLD = 0; // meters AMSL — anything above is land
+
+/**
+ * Fetch an elevation grid covering the route corridor.
+ * Uses the Windy getElevation API to build a 2D grid for fast synchronous lookups.
+ */
+export async function fetchElevationGrid(
+    waypoints: Waypoint[],
+    corridorWidthNm = 60,
+    resolution = 0.1,
+    onProgress?: (fetched: number, total: number) => void,
+): Promise<ElevationGrid> {
+    const corridorDeg = corridorWidthNm / 60;
+    let minLat = Infinity, maxLat = -Infinity, minLon = Infinity, maxLon = -Infinity;
+    for (const wp of waypoints) {
+        minLat = Math.min(minLat, wp.lat);
+        maxLat = Math.max(maxLat, wp.lat);
+        minLon = Math.min(minLon, wp.lon);
+        maxLon = Math.max(maxLon, wp.lon);
+    }
+    minLat = Math.max(-85, minLat - corridorDeg);
+    maxLat = Math.min(85, maxLat + corridorDeg);
+    minLon -= corridorDeg;
+    maxLon += corridorDeg;
+
+    const gridLats: number[] = [];
+    const gridLons: number[] = [];
+    for (let lat = minLat; lat <= maxLat; lat += resolution) gridLats.push(lat);
+    for (let lon = minLon; lon <= maxLon; lon += resolution) gridLons.push(lon);
+
+    const latCount = gridLats.length;
+    const lonCount = gridLons.length;
+    const totalPoints = latCount * lonCount;
+
+    // Initialize grid with 0 (water)
+    const data: number[][] = Array.from({ length: latCount }, () => new Array(lonCount).fill(0));
+
+    // Build request list
+    const requests: { latIdx: number; lonIdx: number; lat: number; lon: number }[] = [];
+    for (let li = 0; li < latCount; li++) {
+        for (let lj = 0; lj < lonCount; lj++) {
+            requests.push({ latIdx: li, lonIdx: lj, lat: gridLats[li], lon: gridLons[lj] });
+        }
+    }
+
+    const BATCH_SIZE = 16;
+    let fetched = 0;
+
+    for (let i = 0; i < requests.length; i += BATCH_SIZE) {
+        const batch = requests.slice(i, i + BATCH_SIZE);
+        const promises = batch.map(({ latIdx, lonIdx, lat, lon }) =>
+            getElevation(lat, lon)
+                .then((resp: HttpPayload<number>) => {
+                    data[latIdx][lonIdx] = resp.data;
+                })
+                .catch(() => {
+                    // On error, assume water (0)
+                    data[latIdx][lonIdx] = 0;
+                }),
+        );
+        await Promise.all(promises);
+        fetched += batch.length;
+        onProgress?.(Math.min(fetched, totalPoints), totalPoints);
+    }
+
+    return {
+        data,
+        minLat: gridLats[0],
+        minLon: gridLons[0],
+        latStep: resolution,
+        lonStep: resolution,
+        latCount,
+        lonCount,
+    };
+}
+
+/** Get bilinear-interpolated elevation at a point from the cached grid. */
+export function getElevationAtPoint(lat: number, lon: number, grid: ElevationGrid): number {
+    const latIdx = (lat - grid.minLat) / grid.latStep;
+    const lonIdx = (lon - grid.minLon) / grid.lonStep;
+
+    const i0 = Math.floor(latIdx);
+    const j0 = Math.floor(lonIdx);
+
+    // Outside the grid → assume water
+    if (i0 < 0 || i0 >= grid.latCount - 1 || j0 < 0 || j0 >= grid.lonCount - 1) {
+        return 0;
+    }
+
+    const i1 = i0 + 1;
+    const j1 = j0 + 1;
+    const fLat = latIdx - i0;
+    const fLon = lonIdx - j0;
+
+    return (
+        grid.data[i0][j0] * (1 - fLat) * (1 - fLon) +
+        grid.data[i0][j1] * (1 - fLat) * fLon +
+        grid.data[i1][j0] * fLat * (1 - fLon) +
+        grid.data[i1][j1] * fLat * fLon
+    );
+}
+
+/** Check whether a point is on land. */
+export function isPointOnLand(lat: number, lon: number, grid: ElevationGrid): boolean {
+    return getElevationAtPoint(lat, lon, grid) > LAND_ELEVATION_THRESHOLD;
+}
+
+/**
+ * Check whether a straight leg between two points crosses land.
+ * Samples intermediate points along the segment.
+ */
+export function isLegOverLand(
+    lat1: number, lon1: number,
+    lat2: number, lon2: number,
+    grid: ElevationGrid,
+    samples = 5,
+): boolean {
+    for (let i = 1; i < samples; i++) {
+        const frac = i / samples;
+        const lat = lat1 + (lat2 - lat1) * frac;
+        const lon = lon1 + (lon2 - lon1) * frac;
+        if (isPointOnLand(lat, lon, grid)) {
+            return true;
+        }
+    }
+    return false;
 }
