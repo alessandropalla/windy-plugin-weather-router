@@ -22,6 +22,10 @@
                     <span class="stat-value">{result.metrics.maxWindKt.toFixed(0)}</span>
                     <span class="stat-label">max wind kt</span>
                 </div>
+                <div class="stat">
+                    <span class="stat-value">{result.metrics.maxWaveM.toFixed(1)}</span>
+                    <span class="stat-label">max waves m</span>
+                </div>
             </div>
             <div class="summary-grid mt-5">
                 <div class="stat">
@@ -88,6 +92,8 @@
             <svg bind:this={speedChartEl} class="timeline-chart"></svg>
             <div class="chart-label size-xs fg-grey mt-10">True Wind Angle (°)</div>
             <svg bind:this={twaChartEl} class="timeline-chart"></svg>
+            <div class="chart-label size-xs fg-grey mt-10">Wave Height (m)</div>
+            <svg bind:this={wavesChartEl} class="timeline-chart"></svg>
         </div>
 
         <div class="mb-15">
@@ -102,6 +108,7 @@
                             <th>Wind (kt)</th>
                             <th>Boat (kt)</th>
                             <th>TWA (°)</th>
+                            <th>Waves (m)</th>
                             <th>Mode</th>
                         </tr>
                     </thead>
@@ -113,6 +120,7 @@
                                 <td>{row.windKt}</td>
                                 <td>{row.boatspeedKt}</td>
                                 <td>{row.twaDeg}</td>
+                                <td>{row.waveM}</td>
                                 <td>{row.isMotoring ? 'Motor' : 'Sail'}</td>
                             </tr>
                         {/each}
@@ -174,6 +182,7 @@
     let windChartEl: SVGSVGElement;
     let speedChartEl: SVGSVGElement;
     let twaChartEl: SVGSVGElement;
+    let wavesChartEl: SVGSVGElement;
     let showIsochrones = false;
 
     $: timelineRows = result
@@ -183,6 +192,7 @@
               windKt: p.tws.toFixed(1),
               boatspeedKt: p.boatSpeed.toFixed(1),
               twaDeg: p.twa.toFixed(0),
+                            waveM: p.waveHeight.toFixed(2),
               isMotoring: p.isMotoring,
           }))
         : [];
@@ -192,13 +202,15 @@
             drawTimelineChart(windChartEl, result.optimalPath, p => p.tws, '#4dc9f6', 'kt');
             drawTimelineChart(speedChartEl, result.optimalPath, p => p.boatSpeed, '#f67019', 'kt');
             drawTimelineChart(twaChartEl, result.optimalPath, p => p.twa, '#acc236', '°');
+            drawTimelineChart(wavesChartEl, result.optimalPath, p => p.waveHeight, '#00bcd4', 'm');
         }
     });
 
     function formatDuration(hours: number): string {
-        const d = Math.floor(hours / 24);
-        const h = Math.floor(hours % 24);
-        const m = Math.round((hours % 1) * 60);
+        const totalMinutes = Math.max(0, Math.round(hours * 60));
+        const d = Math.floor(totalMinutes / (24 * 60));
+        const h = Math.floor((totalMinutes % (24 * 60)) / 60);
+        const m = totalMinutes % 60;
         if (d > 0) return `${d}d ${h}h`;
         if (h > 0) return `${h}h ${m}m`;
         return `${m}m`;

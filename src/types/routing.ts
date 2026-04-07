@@ -54,6 +54,12 @@ export interface IsochronePoint {
     twd: number;
     /** True wind angle at this point (degrees, 0-180) */
     twa: number;
+    /** Significant wave height at this point (meters) */
+    waveHeight: number;
+    /** Wave direction at this point (degrees) */
+    waveDir: number;
+    /** Wave period at this point (seconds) */
+    wavePeriod: number;
     /** Whether boat is motoring at this point */
     isMotoring: boolean;
     /** Cumulative distance from start (nm) */
@@ -75,6 +81,12 @@ export interface WindAtPoint {
     twd: number;
     /** Gust speed in knots */
     gust: number;
+    /** Significant wave height in meters */
+    waveHeight: number;
+    /** Wave direction in degrees */
+    waveDir: number;
+    /** Wave period in seconds */
+    wavePeriod: number;
 }
 
 /** Metrics for a computed route */
@@ -85,6 +97,7 @@ export interface RouteMetrics {
     avgSpeedKt: number;
     maxWindKt: number;
     maxGustKt: number;
+    maxWaveM: number;
     motoringTimeHours: number;
     motoringDistanceNm: number;
     fuelConsumedLiters: number;

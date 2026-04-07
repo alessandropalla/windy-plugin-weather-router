@@ -351,6 +351,7 @@
                 `<b>${new Date(curr.time).toUTCString()}</b><br/>` +
                 `Speed: ${curr.boatSpeed.toFixed(1)} kt<br/>` +
                 `Wind: ${curr.tws.toFixed(0)} kt @ ${curr.twd.toFixed(0)}°<br/>` +
+                `Waves: ${curr.waveHeight.toFixed(1)} m @ ${curr.waveDir.toFixed(0)}° (${curr.wavePeriod.toFixed(1)} s)<br/>` +
                 `TWA: ${curr.twa.toFixed(0)}°<br/>` +
                 `${curr.isMotoring ? '⚙ Motoring' : '⛵ Sailing'}`,
             );
@@ -442,6 +443,9 @@
             'boat_speed_kt',
             'wind_speed_kt',
             'wind_dir_deg',
+            'wave_height_m',
+            'wave_dir_deg',
+            'wave_period_s',
             'twa_deg',
             'is_motoring',
         ].join(',');
@@ -454,6 +458,9 @@
             p.boatSpeed.toFixed(2),
             p.tws.toFixed(2),
             p.twd.toFixed(1),
+            p.waveHeight.toFixed(2),
+            p.waveDir.toFixed(1),
+            p.wavePeriod.toFixed(2),
             p.twa.toFixed(1),
             p.isMotoring ? '1' : '0',
         ].join(','));
@@ -466,7 +473,7 @@
     <rtept lat="${p.lat.toFixed(6)}" lon="${p.lon.toFixed(6)}">
       <name>WP ${i + 1}</name>
       <time>${new Date(p.time).toISOString()}</time>
-      <desc>Boat ${p.boatSpeed.toFixed(1)}kt, Wind ${p.tws.toFixed(1)}kt @ ${p.twd.toFixed(0)}deg, ${p.isMotoring ? 'Motoring' : 'Sailing'}</desc>
+            <desc>Boat ${p.boatSpeed.toFixed(1)}kt, Wind ${p.tws.toFixed(1)}kt @ ${p.twd.toFixed(0)}deg, Waves ${p.waveHeight.toFixed(1)}m @ ${p.waveDir.toFixed(0)}deg (${p.wavePeriod.toFixed(1)}s), ${p.isMotoring ? 'Motoring' : 'Sailing'}</desc>
     </rtept>`).join('');
 
         return `<?xml version="1.0" encoding="UTF-8"?>

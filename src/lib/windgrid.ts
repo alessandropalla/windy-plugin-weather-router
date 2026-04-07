@@ -1,8 +1,8 @@
 import { getPointForecastData } from '@windy/fetch';
+import { msToKnots, distanceNm } from './geo';
 import type { DataHash, WeatherDataPayload } from '@windy/interfaces.d';
 import type { HttpPayload } from '@windy/http.d';
 import type { Waypoint, WindAtPoint } from '../types/routing';
-import { msToKnots, distanceNm } from './geo';
 
 /** Cached wind data for a grid of points */
 export interface WindGrid {
@@ -25,6 +25,14 @@ interface GridPoint {
     windDir: number[];
     /** Gust speed in m/s at each timestamp */
     gust: number[];
+    /** Wave forecast timestamps (ms) */
+    waveTimestamps: number[];
+    /** Significant wave height in meters at each timestamp */
+    waves: number[];
+    /** Wave direction in degrees at each timestamp */
+    wavesDir: number[];
+    /** Wave period in seconds at each timestamp */
+    wavesPeriod: number[];
 }
 
 /**
@@ -44,6 +52,8 @@ export async function fetchWindGrid(
     resolution = 0.5,
     onProgress?: (fetched: number, total: number) => void,
 ): Promise<WindGrid> {
+    const waveProduct = resolveWaveProduct(product);
+
     // Compute bounding box around all waypoints with corridor padding
     const corridorDeg = corridorWidthNm / 60; // rough: 1° lat ≈ 60nm
     let minLat = Infinity, maxLat = -Infinity, minLon = Infinity, maxLon = -Infinity;
@@ -65,8 +75,12 @@ export async function fetchWindGrid(
     // Generate grid points
     const gridLats: number[] = [];
     const gridLons: number[] = [];
-    for (let lat = minLat; lat <= maxLat; lat += resolution) gridLats.push(lat);
-    for (let lon = minLon; lon <= maxLon; lon += resolution) gridLons.push(lon);
+    for (let lat = minLat; lat <= maxLat; lat += resolution) {
+        gridLats.push(lat);
+    }
+    for (let lon = minLon; lon <= maxLon; lon += resolution) {
+        gridLons.push(lon);
+    }
 
     const totalPoints = gridLats.length * gridLons.length;
     const points: GridPoint[] = [];
@@ -74,7 +88,7 @@ export async function fetchWindGrid(
 
     // Fetch in batches to avoid overwhelming the API
     const BATCH_SIZE = 8;
-    const requests: Array<{ lat: number; lon: number }> = [];
+    const requests: { lat: number; lon: number }[] = [];
     for (const lat of gridLats) {
         for (const lon of gridLons) {
             requests.push({ lat, lon });
@@ -84,9 +98,15 @@ export async function fetchWindGrid(
     for (let i = 0; i < requests.length; i += BATCH_SIZE) {
         const batch = requests.slice(i, i + BATCH_SIZE);
         const promises = batch.map(({ lat, lon }) =>
-            getPointForecastData(product as any, { lat, lon }, pluginName)
-                .then((response: HttpPayload<WeatherDataPayload<DataHash>>) => {
-                    const data = response.data.data;
+            Promise.all([
+                getPointForecastData(product as any, { lat, lon }, pluginName as any),
+                waveProduct
+                    ? getPointForecastData(waveProduct as any, { lat, lon }, pluginName as any).catch(() => null)
+                    : Promise.resolve(null),
+            ])
+                .then(([windResp, wavesResp]) => {
+                    const data = (windResp as HttpPayload<WeatherDataPayload<DataHash>>).data.data;
+                    const waveData = (wavesResp as HttpPayload<WeatherDataPayload<DataHash>> | null)?.data.data;
                     return {
                         lat,
                         lon,
@@ -94,6 +114,10 @@ export async function fetchWindGrid(
                         windSpeed: data.wind as number[],
                         windDir: data.windDir as number[],
                         gust: data.gust as number[],
+                        waveTimestamps: (waveData?.ts || data.ts || []) as number[],
+                        waves: (waveData?.waves || data.waves || []) as number[],
+                        wavesDir: (waveData?.wavesDir || data.wavesDir || []) as number[],
+                        wavesPeriod: (waveData?.wavesPeriod || data.wavesPeriod || []) as number[],
                     } satisfies GridPoint;
                 })
                 .catch(() => null),
@@ -101,7 +125,9 @@ export async function fetchWindGrid(
 
         const results = await Promise.all(promises);
         for (const r of results) {
-            if (r) points.push(r);
+            if (r) {
+                points.push(r);
+            }
         }
         fetched += batch.length;
         onProgress?.(fetched, totalPoints);
@@ -128,7 +154,7 @@ export function getWindAtPointAndTime(
     // Find nearest grid points (up to 4 closest)
     const nearest = findNearestPoints(lat, lon, grid.points, 4);
     if (nearest.length === 0) {
-        return { tws: 0, twd: 0, gust: 0 };
+        return { tws: 0, twd: 0, gust: 0, waveHeight: 0, waveDir: 0, wavePeriod: 0 };
     }
 
     // If only one point or exact match, just interpolate in time
@@ -138,26 +164,49 @@ export function getWindAtPointAndTime(
 
     // Inverse-distance-weighted spatial interpolation
     const totalInvDist = nearest.reduce((sum, n) => sum + 1 / n.dist, 0);
-    let twsSum = 0, gustSum = 0;
+    let twsSum = 0, gustSum = 0, waveHeightSum = 0, wavePeriodSum = 0;
     let twdSin = 0, twdCos = 0; // circular mean for direction
+    let waveDirSin = 0, waveDirCos = 0;
 
     for (const n of nearest) {
         const weight = (1 / n.dist) / totalInvDist;
         const wind = interpolateInTime(n.point, timestamp);
         twsSum += wind.tws * weight;
         gustSum += wind.gust * weight;
+        waveHeightSum += wind.waveHeight * weight;
+        wavePeriodSum += wind.wavePeriod * weight;
         const twdRad = wind.twd * Math.PI / 180;
         twdSin += Math.sin(twdRad) * weight;
         twdCos += Math.cos(twdRad) * weight;
+        const waveDirRad = wind.waveDir * Math.PI / 180;
+        waveDirSin += Math.sin(waveDirRad) * weight;
+        waveDirCos += Math.cos(waveDirRad) * weight;
     }
 
     const twd = ((Math.atan2(twdSin, twdCos) * 180 / Math.PI) + 360) % 360;
-    return { tws: msToKnots(twsSum), twd, gust: msToKnots(gustSum) };
+    const waveDir = ((Math.atan2(waveDirSin, waveDirCos) * 180 / Math.PI) + 360) % 360;
+    return {
+        tws: msToKnots(twsSum),
+        twd,
+        gust: msToKnots(gustSum),
+        waveHeight: waveHeightSum,
+        waveDir,
+        wavePeriod: wavePeriodSum,
+    };
 }
 
 /** Interpolate wind data at a specific timestamp for a single grid point */
 function interpolateInTime(point: GridPoint, timestamp: number): WindAtPoint {
-    const { timestamps, windSpeed, windDir, gust } = point;
+    const { timestamps, windSpeed, windDir, gust, waveTimestamps, waves, wavesDir, wavesPeriod } = point;
+    const lerp = (a: number, b: number, frac: number) => a * (1 - frac) + b * frac;
+
+    const [waveHeightInterp, waveDirInterp, wavePeriodInterp] = interpolateWaves(
+        waveTimestamps,
+        waves,
+        wavesDir,
+        wavesPeriod,
+        timestamp,
+    );
 
     // Before first timestamp: use first value
     if (timestamp <= timestamps[0]) {
@@ -165,6 +214,9 @@ function interpolateInTime(point: GridPoint, timestamp: number): WindAtPoint {
             tws: msToKnots(windSpeed[0]),
             twd: windDir[0],
             gust: msToKnots(gust[0]),
+            waveHeight: waveHeightInterp,
+            waveDir: waveDirInterp,
+            wavePeriod: wavePeriodInterp,
         };
     }
 
@@ -175,6 +227,9 @@ function interpolateInTime(point: GridPoint, timestamp: number): WindAtPoint {
             tws: msToKnots(windSpeed[last]),
             twd: windDir[last],
             gust: msToKnots(gust[last]),
+            waveHeight: waveHeightInterp,
+            waveDir: waveDirInterp,
+            wavePeriod: wavePeriodInterp,
         };
     }
 
@@ -183,8 +238,8 @@ function interpolateInTime(point: GridPoint, timestamp: number): WindAtPoint {
         if (timestamp >= timestamps[i] && timestamp <= timestamps[i + 1]) {
             const frac = (timestamp - timestamps[i]) / (timestamps[i + 1] - timestamps[i]);
 
-            const tws = msToKnots(windSpeed[i] * (1 - frac) + windSpeed[i + 1] * frac);
-            const g = msToKnots(gust[i] * (1 - frac) + gust[i + 1] * frac);
+            const tws = msToKnots(lerp(windSpeed[i], windSpeed[i + 1], frac));
+            const g = msToKnots(lerp(gust[i], gust[i + 1], frac));
 
             // Circular interpolation for wind direction
             const d1 = windDir[i] * Math.PI / 180;
@@ -193,12 +248,75 @@ function interpolateInTime(point: GridPoint, timestamp: number): WindAtPoint {
             const cos = Math.cos(d1) * (1 - frac) + Math.cos(d2) * frac;
             const twd = ((Math.atan2(sin, cos) * 180 / Math.PI) + 360) % 360;
 
-            return { tws, twd, gust: g };
+            return {
+                tws,
+                twd,
+                gust: g,
+                waveHeight: waveHeightInterp,
+                waveDir: waveDirInterp,
+                wavePeriod: wavePeriodInterp,
+            };
         }
     }
 
     // Fallback
-    return { tws: 0, twd: 0, gust: 0 };
+    return { tws: 0, twd: 0, gust: 0, waveHeight: 0, waveDir: 0, wavePeriod: 0 };
+}
+
+function interpolateWaves(
+    timestamps: number[],
+    waves: number[],
+    wavesDir: number[],
+    wavesPeriod: number[],
+    timestamp: number,
+): [number, number, number] {
+    if (timestamps.length === 0) {
+        return [0, 0, 0];
+    }
+
+    const safeAt = (arr: number[], idx: number) => (idx >= 0 && idx < arr.length ? arr[idx] : 0);
+    const lerp = (a: number, b: number, frac: number) => a * (1 - frac) + b * frac;
+    const interpDir = (d1: number, d2: number, frac: number) => {
+        const r1 = d1 * Math.PI / 180;
+        const r2 = d2 * Math.PI / 180;
+        const sin = Math.sin(r1) * (1 - frac) + Math.sin(r2) * frac;
+        const cos = Math.cos(r1) * (1 - frac) + Math.cos(r2) * frac;
+        return ((Math.atan2(sin, cos) * 180 / Math.PI) + 360) % 360;
+    };
+
+    if (timestamp <= timestamps[0]) {
+        return [safeAt(waves, 0), safeAt(wavesDir, 0), safeAt(wavesPeriod, 0)];
+    }
+
+    const last = timestamps.length - 1;
+    if (timestamp >= timestamps[last]) {
+        return [safeAt(waves, last), safeAt(wavesDir, last), safeAt(wavesPeriod, last)];
+    }
+
+    for (let i = 0; i < timestamps.length - 1; i++) {
+        if (timestamp >= timestamps[i] && timestamp <= timestamps[i + 1]) {
+            const frac = (timestamp - timestamps[i]) / (timestamps[i + 1] - timestamps[i]);
+            const waveHeight = lerp(safeAt(waves, i), safeAt(waves, i + 1), frac);
+            const wavePeriod = lerp(safeAt(wavesPeriod, i), safeAt(wavesPeriod, i + 1), frac);
+            const waveDir = interpDir(safeAt(wavesDir, i), safeAt(wavesDir, i + 1), frac);
+            return [waveHeight, waveDir, wavePeriod];
+        }
+    }
+
+    return [0, 0, 0];
+}
+
+function resolveWaveProduct(product: string): string | null {
+    if (product === 'ecmwf') {
+        return 'ecmwfWaves';
+    }
+    if (product === 'gfs') {
+        return 'gfsWaves';
+    }
+    if (product === 'icon') {
+        return 'iconEuWaves';
+    }
+    return null;
 }
 
 /** Find N nearest grid points to a given lat/lon */
@@ -207,7 +325,7 @@ function findNearestPoints(
     lon: number,
     points: GridPoint[],
     n: number,
-): Array<{ point: GridPoint; dist: number }> {
+): { point: GridPoint; dist: number }[] {
     const withDist = points.map(p => ({
         point: p,
         dist: distanceNm(lat, lon, p.lat, p.lon),

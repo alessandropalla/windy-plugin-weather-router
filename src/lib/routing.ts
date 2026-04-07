@@ -61,6 +61,9 @@ export function computeRoute(
             tws: 0,
             twd: 0,
             twa: 0,
+            waveHeight: 0,
+            waveDir: 0,
+            wavePeriod: 0,
             isMotoring: false,
             distanceFromStart: 0,
             motorHoursUsed: 0,
@@ -146,6 +149,9 @@ export function computeRoute(
                     tws: wind.tws,
                     twd: wind.twd,
                     twa,
+                    waveHeight: wind.waveHeight,
+                    waveDir: wind.waveDir,
+                    wavePeriod: wind.wavePeriod,
                     isMotoring,
                     distanceFromStart: parent.distanceFromStart + distTraveled,
                     motorHoursUsed: parent.motorHoursUsed + (isMotoring ? timeStepHours : 0),
@@ -412,6 +418,7 @@ function computeMetrics(path: IsochronePoint[], waypoints: Waypoint[], motor: Mo
             avgSpeedKt: 0,
             maxWindKt: 0,
             maxGustKt: 0,
+            maxWaveM: 0,
             motoringTimeHours: 0,
             motoringDistanceNm: 0,
             fuelConsumedLiters: 0,
@@ -420,33 +427,47 @@ function computeMetrics(path: IsochronePoint[], waypoints: Waypoint[], motor: Mo
     }
 
     const first = path[0];
-    const last = path[path.length - 1];
-    const totalTimeHours = (last.time - first.time) / (3600 * 1000);
 
     let totalDistanceNm = 0;
+    let totalTimeHours = 0;
     let maxWind = 0;
     let maxGust = 0;
+    let maxWave = 0;
     let motoringHours = 0;
     let motoringDist = 0;
 
     // Per-leg tracking
-    const legData: Map<number, { points: IsochronePoint[] }> = new Map();
+    const legData = new Map<number, {
+        distanceNm: number;
+        timeHours: number;
+        windSum: number;
+        speedSum: number;
+        waveSum: number;
+        samples: number;
+        maxWindKt: number;
+        maxWaveM: number;
+        motoringDistanceNm: number;
+    }>();
 
     for (let i = 1; i < path.length; i++) {
         const prev = path[i - 1];
         const curr = path[i];
         const segDist = distanceNm(prev.lat, prev.lon, curr.lat, curr.lon);
+        const segTime = segDist / Math.max(curr.boatSpeed, 0.1);
         totalDistanceNm += segDist;
+        totalTimeHours += segTime;
 
         if (curr.tws > maxWind) {
             maxWind = curr.tws;
         }
         if (curr.tws > maxGust) {
             maxGust = curr.tws;
-        } // gust tracked separately if available
+        }
+        if (curr.waveHeight > maxWave) {
+            maxWave = curr.waveHeight;
+        }
 
         if (curr.isMotoring) {
-            const segTime = (curr.time - prev.time) / (3600 * 1000);
             motoringHours += segTime;
             motoringDist += segDist;
         }
@@ -454,66 +475,59 @@ function computeMetrics(path: IsochronePoint[], waypoints: Waypoint[], motor: Mo
         // Track leg (keyed by which waypoint segment we're on)
         const legKey = Math.min(curr.waypointIndex, waypoints.length - 1);
         if (!legData.has(legKey)) {
-            legData.set(legKey, { points: [] });
+            legData.set(legKey, {
+                distanceNm: 0,
+                timeHours: 0,
+                windSum: 0,
+                speedSum: 0,
+                waveSum: 0,
+                samples: 0,
+                maxWindKt: 0,
+                maxWaveM: 0,
+                motoringDistanceNm: 0,
+            });
         }
-        legData.get(legKey)!.points.push(curr);
+        const leg = legData.get(legKey)!;
+        leg.distanceNm += segDist;
+        leg.timeHours += segTime;
+        leg.windSum += curr.tws;
+        leg.speedSum += curr.boatSpeed;
+        leg.waveSum += curr.waveHeight;
+        leg.samples += 1;
+        leg.maxWindKt = Math.max(leg.maxWindKt, curr.tws);
+        leg.maxWaveM = Math.max(leg.maxWaveM, curr.waveHeight);
+        if (curr.isMotoring) {
+            leg.motoringDistanceNm += segDist;
+        }
     }
 
     // Build per-leg metrics
     const legs: LegMetrics[] = [];
     for (const [wpIdx, data] of legData) {
-        const pts = data.points;
-        if (pts.length === 0) {
+        if (data.samples === 0) {
             continue;
         }
-
-        let legDist = 0;
-        let legMotorDist = 0;
-        let windSum = 0;
-        let speedSum = 0;
-        let legMaxWind = 0;
-
-        for (let i = 0; i < pts.length; i++) {
-            const p = pts[i];
-            windSum += p.tws;
-            speedSum += p.boatSpeed;
-            if (p.tws > legMaxWind) {
-                legMaxWind = p.tws;
-            }
-
-            if (i > 0) {
-                const d = distanceNm(pts[i - 1].lat, pts[i - 1].lon, p.lat, p.lon);
-                legDist += d;
-                if (p.isMotoring) {
-                    legMotorDist += d;
-                }
-            }
-        }
-
-        const legTimeH =
-            pts.length > 1
-                ? (pts[pts.length - 1].time - pts[0].time) / (3600 * 1000)
-                : 0;
 
         legs.push({
             fromWaypoint: wpIdx - 1,
             toWaypoint: wpIdx,
-            distanceNm: legDist,
-            timeHours: legTimeH,
-            avgSpeedKt: pts.length > 0 ? speedSum / pts.length : 0,
-            avgWindKt: pts.length > 0 ? windSum / pts.length : 0,
-            maxWindKt: legMaxWind,
-            motoringPercent: legDist > 0 ? (legMotorDist / legDist) * 100 : 0,
+            distanceNm: data.distanceNm,
+            timeHours: data.timeHours,
+            avgSpeedKt: data.timeHours > 0 ? data.distanceNm / data.timeHours : 0,
+            avgWindKt: data.windSum / data.samples,
+            maxWindKt: data.maxWindKt,
+            motoringPercent: data.distanceNm > 0 ? (data.motoringDistanceNm / data.distanceNm) * 100 : 0,
         });
     }
 
     return {
         totalDistanceNm,
         totalTimeHours,
-        arrivalTime: last.time,
+        arrivalTime: first.time + totalTimeHours * 3600 * 1000,
         avgSpeedKt: totalTimeHours > 0 ? totalDistanceNm / totalTimeHours : 0,
         maxWindKt: maxWind,
         maxGustKt: maxGust,
+        maxWaveM: maxWave,
         motoringTimeHours: motoringHours,
         motoringDistanceNm: motoringDist,
         fuelConsumedLiters: motoringHours * Math.max(0, motor.fuelBurnLph),
