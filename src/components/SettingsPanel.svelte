@@ -93,12 +93,13 @@
 </div>
 
 <script lang="ts">
-    import { createEventDispatcher } from 'svelte';
+    import { createEventDispatcher, onMount } from 'svelte';
     import type { RouteConfig } from '../types/routing';
     import type { MotorConfig } from '../types/polar';
     import { DEFAULT_MOTOR_CONFIG } from '../types/polar';
 
     const dispatch = createEventDispatcher<{ change: Partial<RouteConfig> & { motor: MotorConfig } }>();
+    export let value: (Partial<RouteConfig> & { motor?: Partial<MotorConfig> }) | null = null;
 
     // Departure
     let departureDateStr = toDatetimeLocal(Date.now() + 3600 * 1000); // 1h from now
@@ -121,6 +122,39 @@
     let timeStepHours = 1;
     let angularResolution = 10;
     let maxDurationHours = 168; // 7 days
+
+    onMount(() => {
+        applyValue(value);
+    });
+
+    function applyValue(next: (Partial<RouteConfig> & { motor?: Partial<MotorConfig> }) | null) {
+        if (!next) return;
+
+        if (typeof next.departureTime === 'number') {
+            departureDateStr = toDatetimeLocal(next.departureTime);
+        }
+        optimizeDeparture = next.optimizeDeparture ?? optimizeDeparture;
+        departureWindowHours = next.departureWindowHours ?? departureWindowHours;
+        departureStepHours = next.departureStepHours ?? departureStepHours;
+
+        useDeadline = next.mode === 'arrival-deadline';
+        if (typeof next.arrivalDeadline === 'number') {
+            deadlineDateStr = toDatetimeLocal(next.arrivalDeadline);
+        }
+
+        product = next.product ?? product;
+        timeStepHours = next.timeStepHours ?? timeStepHours;
+        angularResolution = next.angularResolution ?? angularResolution;
+        maxDurationHours = next.maxDurationHours ?? maxDurationHours;
+
+        const nextMotor = next.motor;
+        if (nextMotor) {
+            motorEnabled = nextMotor.enabled ?? motorEnabled;
+            motorSpeed = nextMotor.motorSpeed ?? motorSpeed;
+            windThreshold = nextMotor.windThreshold ?? windThreshold;
+            maxMotorHours = nextMotor.maxMotorHours ?? maxMotorHours;
+        }
+    }
 
     function toDatetimeLocal(ts: number): string {
         const d = new Date(ts);

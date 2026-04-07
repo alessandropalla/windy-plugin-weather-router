@@ -20,6 +20,9 @@
 
     <!-- Tab content -->
     {#if activeTab === 'route'}
+        <p class="size-xs fg-grey mb-10">
+            Click "+ Add Waypoint", then left-click on the map to place points.
+        </p>
         <WaypointPanel
             bind:this={waypointPanel}
             bind:waypoints={waypoints}
@@ -66,6 +69,7 @@
     {:else if activeTab === 'settings'}
         <SettingsPanel
             bind:this={settingsPanel}
+            value={settingsCache}
             on:change={onSettingsChange}
         />
 
@@ -103,6 +107,7 @@
     import type { LatLon } from '@windy/interfaces';
 
     const { title, name } = config;
+    const SETTINGS_STORAGE_KEY = 'windy-router-settings';
 
     // --- State ---
     let activeTab: 'route' | 'polars' | 'settings' | 'results' = 'route';
@@ -156,13 +161,38 @@
 
     function onSettingsChange(e: CustomEvent) {
         settingsCache = e.detail;
+        localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settingsCache));
+    }
+
+    function loadSavedSettings() {
+        try {
+            const raw = localStorage.getItem(SETTINGS_STORAGE_KEY);
+            if (!raw) return;
+            const parsed = JSON.parse(raw) as Partial<RouteConfig> & {
+                motor?: Partial<typeof DEFAULT_MOTOR_CONFIG>;
+            };
+            settingsCache = {
+                ...settingsCache,
+                ...parsed,
+                motor: {
+                    ...DEFAULT_MOTOR_CONFIG,
+                    ...(parsed.motor || {}),
+                },
+            };
+        } catch {
+            // Ignore invalid stored data.
+        }
     }
 
     // --- Map click handler ---
     function onMapClick(latLon: LatLon) {
-        if (waypointAddMode && waypointPanel) {
-            waypointPanel.addWaypoint(latLon.lat, latLon.lon);
-        }
+        if (!waypointAddMode || !waypointPanel) return;
+        waypointPanel.addWaypoint(latLon.lat, latLon.lon);
+    }
+
+    function onLeafletMapClick(event: L.LeafletMouseEvent) {
+        if (!event?.latlng) return;
+        onMapClick({ lat: event.latlng.lat, lon: event.latlng.lng });
     }
 
     // --- Waypoint markers on map ---
@@ -173,12 +203,12 @@
 
         for (let i = 0; i < wps.length; i++) {
             const wp = wps[i];
-            const icon = i === 0
-                ? markers.pulsatingIcon
-                : markers.myLocationIcon;
+            const primaryIcon = markers?.pulsatingIcon;
+            const secondaryIcon = markers?.myLocationIcon || primaryIcon;
+            const icon = i === 0 ? primaryIcon : secondaryIcon;
             const marker = new L.Marker(
                 { lat: wp.lat, lng: wp.lon },
-                { icon, draggable: true },
+                icon ? { icon, draggable: true } : { draggable: true },
             ).addTo(map);
 
             marker.bindTooltip(wp.name || `WPT ${i + 1}`, { permanent: false });
@@ -380,25 +410,32 @@
 
     // --- Lifecycle ---
     export const onopen = (params?: LatLon) => {
+        loadSavedSettings();
+
         // Load saved waypoints
         const saved = loadWaypoints();
         if (saved.length > 0) {
             waypoints = saved;
         }
 
+        activeTab = 'route';
+
         // If opened from context menu with lat/lon, add as waypoint
         if (params && 'lat' in params && 'lon' in params) {
             waypoints = [...waypoints, { lat: params.lat, lon: params.lon, name: `WPT ${waypoints.length + 1}` }];
             saveWaypoints(waypoints);
+            waypointAddMode = true;
         }
     };
 
     onMount(() => {
         singleclick.on(name, onMapClick);
+        map.on('click', onLeafletMapClick);
     });
 
     onDestroy(() => {
         singleclick.off(name, onMapClick);
+        map.off('click', onLeafletMapClick);
         removeAllMapLayers();
     });
 </script>
