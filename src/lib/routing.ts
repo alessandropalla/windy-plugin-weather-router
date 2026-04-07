@@ -13,6 +13,8 @@ import type { MotorConfig } from '../types/polar';
 import type {
     Waypoint,
     RouteConfig,
+    OptimizationMode,
+    DepartureAnalysisRow,
     IsochronePoint,
     IsochroneFront,
     RouteResult,
@@ -24,6 +26,60 @@ import type {
 import type { WindGrid, ElevationGrid } from './windgrid';
 
 const ARRIVAL_RADIUS_NM = 2; // Consider arrived when within this radius of destination
+const EXTRA_SEARCH_HOURS_FOR_ALT_OBJECTIVES = 24;
+
+type ArrivalCandidate = {
+    point: IsochronePoint;
+    parentFrontIndex: number;
+};
+
+type RouteEvaluation = {
+    path: IsochronePoint[];
+    metrics: RouteMetrics;
+    score: number;
+};
+
+type ScoringWeights = {
+    time: number;
+    motoringHours: number;
+    fuel: number;
+    maxWind: number;
+    maxWave: number;
+};
+
+function getModeLabel(mode: OptimizationMode): string {
+    switch (mode) {
+        case 'min-time':
+            return 'Fastest arrival';
+        case 'min-motoring':
+            return 'Least motoring';
+        case 'min-max-wind':
+            return 'Lower max wind';
+        case 'min-wave-exposure':
+            return 'Lower wave exposure';
+        case 'comfort-balanced':
+            return 'Balanced comfort';
+        case 'arrival-deadline':
+            return 'Meet arrival deadline';
+    }
+}
+
+function getModeWeights(mode: OptimizationMode): ScoringWeights {
+    switch (mode) {
+        case 'min-motoring':
+            return { time: 0.30, motoringHours: 1.0, fuel: 0.70, maxWind: 0.10, maxWave: 0.10 };
+        case 'min-max-wind':
+            return { time: 0.35, motoringHours: 0.10, fuel: 0.10, maxWind: 1.0, maxWave: 0.30 };
+        case 'min-wave-exposure':
+            return { time: 0.35, motoringHours: 0.10, fuel: 0.10, maxWind: 0.30, maxWave: 1.0 };
+        case 'comfort-balanced':
+            return { time: 0.45, motoringHours: 0.30, fuel: 0.20, maxWind: 0.60, maxWave: 0.60 };
+        case 'min-time':
+        case 'arrival-deadline':
+        default:
+            return { time: 1.0, motoringHours: 0, fuel: 0, maxWind: 0, maxWave: 0 };
+    }
+}
 
 /**
  * Main entry point: compute optimal weather route using isochrone method.
@@ -81,7 +137,9 @@ export function computeRoute(
     // Track all fronts for backtracking
     const allFronts: IsochroneFront[] = [currentFront];
 
-    let arrivedPoint: IsochronePoint | null = null;
+    const arrivedCandidates: ArrivalCandidate[] = [];
+    let firstArrivalStep = -1;
+    const extraObjectiveSteps = Math.max(1, Math.ceil(EXTRA_SEARCH_HOURS_FOR_ALT_OBJECTIVES / timeStepHours));
 
     for (let step = 0; step < maxSteps; step++) {
         const currentTime = departureTime + (step + 1) * timeStepMs;
@@ -101,7 +159,7 @@ export function computeRoute(
 
             // Generate candidate headings: fan around the bearing to target
             const bearingToTarget = bearing(parent.lat, parent.lon, targetWp.lat, targetWp.lon);
-            const headings = generateHeadings(bearingToTarget, angularResolution, config.headingBias ?? 0);
+            const headings = generateHeadings(bearingToTarget, angularResolution);
 
             for (const hdg of headings) {
                 // Get wind at parent position and current time
@@ -109,6 +167,14 @@ export function computeRoute(
 
                 // Compute True Wind Angle
                 const twa = computeTWA(hdg, wind.twd);
+
+                // Wind safety filter (skip if wind exceeds limit, waypoints exempt)
+                if (config.maxWindLimitKt && config.maxWindLimitKt > 0 && wind.tws > config.maxWindLimitKt) {
+                    const nearWaypoint = waypoints.some(
+                        wp => distanceNm(parent.lat, parent.lon, wp.lat, wp.lon) <= ARRIVAL_RADIUS_NM,
+                    );
+                    if (!nearWaypoint) continue;
+                }
 
                 // Look up boat speed from polars
                 let boatSpeed = interpolateBoatSpeed(boat.polar, twa, wind.tws);
@@ -201,9 +267,15 @@ export function computeRoute(
                 const distToTarget = distanceNm(newLat, newLon, targetWp.lat, targetWp.lon);
                 if (distToTarget <= ARRIVAL_RADIUS_NM) {
                     if (parent.waypointIndex >= waypoints.length - 1) {
-                        // Reached final destination!
-                        arrivedPoint = newPoint;
-                        break;
+                            // Reached final destination. Keep candidate for objective-based ranking.
+                            arrivedCandidates.push({
+                                point: newPoint,
+                                parentFrontIndex: allFronts.length - 1,
+                            });
+                            if (firstArrivalStep < 0) {
+                                firstArrivalStep = step;
+                            }
+                            continue;
                     } else {
                         // Advance to next waypoint
                         newPoint.waypointIndex = parent.waypointIndex + 1;
@@ -212,19 +284,19 @@ export function computeRoute(
 
                 nextFront.push(newPoint);
             }
+        }
 
-            if (arrivedPoint) {
+        if (arrivedCandidates.length > 0) {
+            if (config.mode === 'min-time' || config.mode === 'arrival-deadline') {
+                break;
+            }
+            if (firstArrivalStep >= 0 && step - firstArrivalStep >= extraObjectiveSteps) {
                 break;
             }
         }
 
-        if (arrivedPoint) {
-            allFronts.push([arrivedPoint]);
-            break;
-        }
-
         if (nextFront.length === 0) {
-            break; // No progress possible
+            break;
         }
 
         // Prune the front: keep only best points per angular sector relative to targets
@@ -234,8 +306,8 @@ export function computeRoute(
         allFronts.push(prunedFront);
     }
 
-    // Backtrack to find optimal path
-    const optimalPath = backtrack(allFronts, arrivedPoint);
+    const selected = selectBestArrivalCandidate(arrivedCandidates, allFronts, waypoints, config);
+    const optimalPath = selected.path;
 
     // Ensure path starts/ends exactly on requested waypoints.
     if (optimalPath.length > 0) {
@@ -260,8 +332,7 @@ export function computeRoute(
         throw new Error('No feasible route found with the current settings and forecast window');
     }
 
-    // Compute metrics
-    const metrics = computeMetrics(optimalPath, waypoints, config.boat.motor);
+    const metrics = selected.metrics;
 
     if (config.mode === 'arrival-deadline' && typeof config.arrivalDeadline === 'number') {
         if (metrics.arrivalTime > config.arrivalDeadline) {
@@ -275,6 +346,9 @@ export function computeRoute(
         metrics,
         departureTime,
         optimizedDeparture: config.optimizeDeparture,
+        optimizationMode: config.mode,
+        optimizationLabel: getModeLabel(config.mode),
+        optimizationScore: selected.score,
     };
 }
 
@@ -296,8 +370,9 @@ export function computeRouteWithDepartureOptimization(
     const windowMs = config.departureWindowHours * 3600 * 1000;
     const stepMs = config.departureStepHours * 3600 * 1000;
     let bestResult: RouteResult | null = null;
-    let bestTime = Infinity;
+    let bestScore = Infinity;
     let latestDepartureMeetingDeadline = -Infinity;
+    const successfulResults: RouteResult[] = [];
 
     const deadlineMode =
         config.mode === 'arrival-deadline' && typeof config.arrivalDeadline === 'number';
@@ -318,6 +393,7 @@ export function computeRouteWithDepartureOptimization(
 
         try {
             const result = computeRoute(waypoints, trialConfig, windGrid, undefined, elevationGrid, noGoZones);
+            successfulResults.push(result);
 
             if (deadlineMode) {
                 // In deadline mode, successful routes already satisfy the deadline.
@@ -326,9 +402,9 @@ export function computeRouteWithDepartureOptimization(
                     latestDepartureMeetingDeadline = result.departureTime;
                     bestResult = { ...result, optimizedDeparture: true };
                 }
-            } else if (result.optimalPath.length > 0 && result.metrics.totalTimeHours < bestTime) {
-                // In min-time mode, pick fastest route.
-                bestTime = result.metrics.totalTimeHours;
+            } else if (result.optimalPath.length > 0 && result.optimizationScore < bestScore) {
+                // In objective modes, pick lowest objective score (lower is better).
+                bestScore = result.optimizationScore;
                 bestResult = { ...result, optimizedDeparture: true };
             }
         } catch {
@@ -352,16 +428,97 @@ export function computeRouteWithDepartureOptimization(
         );
     }
 
-    return bestResult;
+    const selectedDepartureTime = bestResult.departureTime;
+    const departureAnalysis: DepartureAnalysisRow[] = successfulResults
+        .map(r => ({
+            departureTime: r.departureTime,
+            arrivalTime: r.metrics.arrivalTime,
+            totalDistanceNm: r.metrics.totalDistanceNm,
+            totalTimeHours: r.metrics.totalTimeHours,
+            avgSpeedKt: r.metrics.avgSpeedKt,
+            motoringTimeHours: r.metrics.motoringTimeHours,
+            fuelConsumedLiters: r.metrics.fuelConsumedLiters,
+            maxWindKt: r.metrics.maxWindKt,
+            maxWaveM: r.metrics.maxWaveM,
+            optimizationScore: r.optimizationScore,
+            selected: r.departureTime === selectedDepartureTime,
+        }))
+        .sort((a, b) => a.departureTime - b.departureTime);
+
+    return {
+        ...bestResult,
+        departureAnalysis,
+    };
+}
+
+function selectBestArrivalCandidate(
+    candidates: ArrivalCandidate[],
+    allFronts: IsochroneFront[],
+    waypoints: Waypoint[],
+    config: RouteConfig,
+): RouteEvaluation {
+    const evaluations: RouteEvaluation[] = [];
+
+    for (const candidate of candidates) {
+        const candidateFronts = [...allFronts.slice(0, candidate.parentFrontIndex + 1), [candidate.point]];
+        const path = backtrack(candidateFronts, candidate.point);
+        if (path.length < 2) {
+            continue;
+        }
+        const metrics = computeMetrics(path, waypoints, config.boat.motor);
+        evaluations.push({ path, metrics, score: Number.POSITIVE_INFINITY });
+    }
+
+    const deadline =
+        config.mode === 'arrival-deadline' && typeof config.arrivalDeadline === 'number'
+            ? config.arrivalDeadline
+            : undefined;
+    const valid =
+        typeof deadline === 'number'
+            ? evaluations.filter(e => e.metrics.arrivalTime <= deadline)
+            : evaluations;
+
+    if (valid.length === 0) {
+        if (typeof deadline === 'number') {
+            throw new Error('Arrival deadline cannot be met with current settings and weather window');
+        }
+        throw new Error('No feasible route found with the current settings and forecast window');
+    }
+
+    const minTime = Math.min(...valid.map(v => Math.max(v.metrics.totalTimeHours, 0.01)));
+    const minMotoring = Math.min(...valid.map(v => Math.max(v.metrics.motoringTimeHours, 0.01)));
+    const minFuel = Math.min(...valid.map(v => Math.max(v.metrics.fuelConsumedLiters, 0.01)));
+    const minMaxWind = Math.min(...valid.map(v => Math.max(v.metrics.maxWindKt, 0.01)));
+    const minMaxWave = Math.min(...valid.map(v => Math.max(v.metrics.maxWaveM, 0.01)));
+
+    const weights = getModeWeights(config.mode);
+
+    for (const e of valid) {
+        if (config.mode === 'min-time' || config.mode === 'arrival-deadline') {
+            e.score = e.metrics.totalTimeHours;
+            continue;
+        }
+        // Explicit weighted model: normalize each metric against the best observed value,
+        // then minimize the weighted sum.
+        e.score =
+            weights.time * (e.metrics.totalTimeHours / minTime) +
+            weights.motoringHours * (e.metrics.motoringTimeHours / minMotoring) +
+            weights.fuel * (e.metrics.fuelConsumedLiters / minFuel) +
+            weights.maxWind * (e.metrics.maxWindKt / minMaxWind) +
+            weights.maxWave * (e.metrics.maxWaveM / minMaxWave);
+    }
+
+    valid.sort((a, b) => a.score - b.score || a.metrics.totalTimeHours - b.metrics.totalTimeHours);
+    return valid[0];
 }
 
 /** Generate heading candidates fanning around a target bearing */
-function generateHeadings(targetBearing: number, angularResolution: number, bias = 0): number[] {
+function generateHeadings(targetBearing: number, angularResolution: number): number[] {
     const headings: number[] = [];
     // Fan ±90° around the target bearing (full 180° arc towards destination)
     const halfFan = 90;
     for (let offset = -halfFan; offset <= halfFan; offset += angularResolution) {
-        headings.push(normalizeAngle(targetBearing + offset + bias));
+        headings.push(normalizeAngle(targetBearing + offset));
     }
     return headings;
 }

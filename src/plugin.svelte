@@ -114,11 +114,13 @@
         <ResultsPanel
             result={routeResult}
             alternativeResults={alternativeResults}
+            alternativesRequested={Boolean(settingsCache.routeAlternatives)}
             useLocalTime={Boolean(settingsCache.useLocalTime)}
             animating={animPlaying}
-            on:toggleIsochrones={e => toggleIsochroneDisplay(e.detail)}
-            on:exportRoute={e => exportRoute(e.detail)}
-            on:animationControl={e => handleAnimationControl(e.detail.playing, e.detail.speed)}
+            on:toggleIsochrones={onToggleIsochrones}
+            on:exportRoute={onExportRoute}
+            on:animationControl={onAnimationControl}
+            on:selectPrimaryRoute={onSelectPrimaryRoute}
         />
     {/if}
 </section>
@@ -140,7 +142,7 @@
 
     import type { PolarDiagram } from './types/polar';
     import { DEFAULT_MOTOR_CONFIG } from './types/polar';
-    import type { Waypoint, RouteConfig, RouteResult, IsochronePoint, NoGoZone, RoutingProgress } from './types/routing';
+    import type { Waypoint, RouteConfig, RouteResult, IsochronePoint, NoGoZone, RoutingProgress, OptimizationMode } from './types/routing';
     import type { WindGrid } from './lib/windgrid';
     import { fetchWindGrid, fetchElevationGrid } from './lib/windgrid';
     import type { ElevationGrid } from './lib/windgrid';
@@ -151,6 +153,13 @@
 
     const { title, name } = config;
     const SETTINGS_STORAGE_KEY = 'windy-router-settings';
+    const ALT_OBJECTIVE_MODES: OptimizationMode[] = [
+        'min-time',
+        'min-motoring',
+        'comfort-balanced',
+        'min-max-wind',
+        'min-wave-exposure',
+    ];
 
     // --- State ---
     let activeTab: 'route' | 'polars' | 'settings' | 'results' = 'route';
@@ -175,9 +184,9 @@
         departureWindowHours: 72,
         departureStepHours: 6,
         product: 'ecmwf',
+        maxWindLimitKt: 25,
         maxWaveHeightM: 0,
         routeAlternatives: false,
-        alternativesFanBias: 25,
         motor: { ...DEFAULT_MOTOR_CONFIG },
     };
 
@@ -482,9 +491,9 @@
                 departureWindowHours: settings.departureWindowHours || 72,
                 departureStepHours: settings.departureStepHours || 6,
                 product: settings.product || 'ecmwf',
+                maxWindLimitKt: settings.maxWindLimitKt ?? 25,
                 maxWaveHeightM: settings.maxWaveHeightM ?? 0,
                 routeAlternatives: settings.routeAlternatives || false,
-                alternativesFanBias: settings.alternativesFanBias ?? 25,
                 boat: {
                     polar: currentPolar,
                     motor: settings.motor || DEFAULT_MOTOR_CONFIG,
@@ -497,22 +506,40 @@
                 progressMsg = p.message;
             });
 
-            routeResult = result;
+            routeResult = {
+                ...result,
+                variantLabel: 'Primary',
+            };
             drawOptimalRoute(result);
 
-            // Alternative routes (run with ±heading bias)
+            // Alternative routes (compare optimization objectives)
             alternativeResults = [];
             clearAlternativeRoutes();
             if (routeConfig.routeAlternatives) {
-                const bias = routeConfig.alternativesFanBias ?? 25;
-                for (const b of [bias, -bias]) {
-                    progressMsg = `Computing alternative (bias ${b > 0 ? '+' : ''}${b}°)...`;
+                const altModes = ALT_OBJECTIVE_MODES.filter(m => m !== result.optimizationMode);
+                for (const altMode of altModes) {
+                    progressMsg = `Computing alternative (${altMode})...`;
                     try {
-                        const altConfig: RouteConfig = { ...routeConfig, headingBias: b, routeAlternatives: false };
+                        // Alternatives should isolate objective differences only.
+                        // Keep the same selected departure, disable departure optimization and keep all constraints.
+                        const altConfig: RouteConfig = {
+                            ...routeConfig,
+                            departureTime: result.departureTime,
+                            optimizeDeparture: false,
+                            mode: altMode,
+                            arrivalDeadline: undefined,
+                            routeAlternatives: false,
+                        };
                         const altResult = await runRoutingTask(altConfig, windGrid, elevationGrid);
-                        alternativeResults = [...alternativeResults, altResult];
+                        alternativeResults = [
+                            ...alternativeResults,
+                            {
+                                ...altResult,
+                                variantLabel: `Objective: ${altResult.optimizationLabel}`,
+                            },
+                        ];
                     } catch {
-                        // skip failed alternative
+                        // skip failed alternative objective
                     }
                 }
                 drawAlternativeRoutes(alternativeResults);
@@ -592,6 +619,22 @@
         }
     }
 
+    function onToggleIsochrones(e: CustomEvent<boolean>) {
+        toggleIsochroneDisplay(e.detail);
+    }
+
+    function onExportRoute(e: CustomEvent<'gpx' | 'csv' | 'geojson'>) {
+        exportRoute(e.detail);
+    }
+
+    function onAnimationControl(e: CustomEvent<{ playing: boolean; speed: number }>) {
+        handleAnimationControl(e.detail.playing, e.detail.speed);
+    }
+
+    function onSelectPrimaryRoute(e: CustomEvent<{ alternativeIndex: number }>) {
+        selectPrimaryRouteVariant(e.detail.alternativeIndex);
+    }
+
     // --- Alternative routes ---
     function clearAlternativeRoutes() {
         for (const group of alternativePolylines) for (const l of group) l.remove();
@@ -613,6 +656,37 @@
             }
             alternativePolylines.push(lines);
         }
+    }
+
+    function selectPrimaryRouteVariant(alternativeIndex: number) {
+        if (!routeResult || alternativeIndex < 0 || alternativeIndex >= alternativeResults.length) {
+            return;
+        }
+
+        const selectedAlternative = alternativeResults[alternativeIndex];
+        const previousPrimary = routeResult;
+        const remainingAlternatives = alternativeResults.filter((_, i) => i !== alternativeIndex);
+
+        routeResult = {
+            ...selectedAlternative,
+            variantLabel: 'Primary',
+        };
+
+        const previousPrimaryVariantLabel =
+            previousPrimary.variantLabel && previousPrimary.variantLabel !== 'Primary'
+                ? previousPrimary.variantLabel
+                : `Objective: ${previousPrimary.optimizationLabel}`;
+
+        alternativeResults = [
+            {
+                ...previousPrimary,
+                variantLabel: previousPrimaryVariantLabel,
+            },
+            ...remainingAlternatives,
+        ];
+
+        drawOptimalRoute(routeResult);
+        drawAlternativeRoutes(alternativeResults);
     }
 
     // --- Animation ---

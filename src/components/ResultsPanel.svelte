@@ -184,16 +184,108 @@
             </div>
         </div>
 
-        <!-- Alternative Routes -->
-        {#if alternativeResults && alternativeResults.length > 0}
+        <div class="mb-15">
+            <div class="size-s mb-5">Route Comparison</div>
+            <div class="size-xs fg-grey mb-5">
+                Primary route is highlighted first. Alternatives help compare speed, comfort, and fuel tradeoffs.
+            </div>
+            <div class="comparison-table-wrap">
+                <table class="comparison-table size-xs">
+                    <thead>
+                        <tr>
+                            <th>Route</th>
+                            <th>Objective</th>
+                            <th>Duration</th>
+                            <th>Distance</th>
+                            <th>Avg kt</th>
+                            <th>Motor h</th>
+                            <th>Fuel L</th>
+                            <th>Max wind</th>
+                            <th>Max waves</th>
+                            <th>Tradeoff</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {#each comparisonRows as row}
+                            <tr class:primary-row={row.primary}>
+                                <td>{row.routeLabel}</td>
+                                <td>{row.objectiveLabel}</td>
+                                <td>{formatDuration(row.totalTimeHours)}</td>
+                                <td>{row.totalDistanceNm.toFixed(1)} nm</td>
+                                <td>{row.avgSpeedKt.toFixed(1)}</td>
+                                <td>{row.motoringTimeHours.toFixed(1)}</td>
+                                <td>{row.fuelConsumedLiters.toFixed(1)}</td>
+                                <td>{row.maxWindKt.toFixed(0)} kt</td>
+                                <td>{row.maxWaveM.toFixed(1)} m</td>
+                                <td>{row.tradeoff}</td>
+                                <td>
+                                    {#if row.primary || row.alternativeIndex === null}
+                                        <span class="size-xs fg-grey">Selected</span>
+                                    {:else}
+                                        <button
+                                            class="button button--variant-ghost size-xs"
+                                            on:click={() => dispatch('selectPrimaryRoute', { alternativeIndex: row.alternativeIndex ?? -1 })}
+                                        >
+                                            Make Primary
+                                        </button>
+                                    {/if}
+                                </td>
+                            </tr>
+                        {/each}
+                    </tbody>
+                </table>
+            </div>
+            {#if alternativesRequested && alternativeResults.length === 0}
+                <div class="size-xs fg-grey mt-5">No feasible objective-based alternatives found with current constraints. Try looser limits.</div>
+            {/if}
+            {#if !alternativesRequested}
+                <div class="size-xs fg-grey mt-5">Enable Route Alternatives in Settings to compare additional route variants.</div>
+            {/if}
+        </div>
+
+        {#if result.optimizedDeparture && result.departureAnalysis && result.departureAnalysis.length > 0}
             <div class="mb-15">
-                <div class="size-s mb-5">Alternative Routes</div>
-                {#each alternativeResults as alt, i}
-                    <div class="alt-row size-xs">
-                        <span class="alt-swatch" style="background:{i === 0 ? '#6ab0de' : '#9b8dc7'}"></span>
-                        Alt {i + 1}: {alt.metrics.totalDistanceNm.toFixed(0)} nm &mdash; {formatDuration(alt.metrics.totalTimeHours)}
-                    </div>
-                {/each}
+                <div class="size-s mb-5">Departure Time Comparison</div>
+                <div class="size-xs fg-grey mb-5">
+                    Each row is one tested departure in the optimization window for the selected objective.
+                </div>
+                <div class="comparison-table-wrap">
+                    <table class="comparison-table size-xs">
+                        <thead>
+                            <tr>
+                                <th>Departure</th>
+                                <th>Arrival</th>
+                                <th>Duration</th>
+                                <th>Distance</th>
+                                <th>Avg kt</th>
+                                <th>Motor h</th>
+                                <th>Fuel L</th>
+                                <th>Max wind</th>
+                                <th>Max waves</th>
+                                <th>Score</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {#each result.departureAnalysis as dep}
+                                <tr class:primary-row={dep.selected}>
+                                    <td>{formatTime(dep.departureTime)}</td>
+                                    <td>{formatTime(dep.arrivalTime)}</td>
+                                    <td>{formatDuration(dep.totalTimeHours)}</td>
+                                    <td>{dep.totalDistanceNm.toFixed(1)} nm</td>
+                                    <td>{dep.avgSpeedKt.toFixed(1)}</td>
+                                    <td>{dep.motoringTimeHours.toFixed(1)}</td>
+                                    <td>{dep.fuelConsumedLiters.toFixed(1)}</td>
+                                    <td>{dep.maxWindKt.toFixed(0)} kt</td>
+                                    <td>{dep.maxWaveM.toFixed(1)} m</td>
+                                    <td>{dep.optimizationScore.toFixed(3)}</td>
+                                    <td>{dep.selected ? 'Selected' : 'Candidate'}</td>
+                                </tr>
+                            {/each}
+                        </tbody>
+                    </table>
+                </div>
             </div>
         {/if}
     {/if}
@@ -207,10 +299,12 @@
         toggleIsochrones: boolean;
         exportRoute: 'gpx' | 'csv' | 'geojson';
         animationControl: { playing: boolean; speed: number };
+        selectPrimaryRoute: { alternativeIndex: number };
     }>();
 
     export let result: RouteResult | null = null;
     export let alternativeResults: RouteResult[] = [];
+    export let alternativesRequested = false;
     export let useLocalTime = false;
     export let animating = false;
 
@@ -222,6 +316,21 @@
 
     // Animation
     let animSpeed = 5; // steps per second
+
+    type ComparisonRow = {
+        routeLabel: string;
+        primary: boolean;
+        alternativeIndex: number | null;
+        objectiveLabel: string;
+        totalDistanceNm: number;
+        totalTimeHours: number;
+        avgSpeedKt: number;
+        motoringTimeHours: number;
+        fuelConsumedLiters: number;
+        maxWindKt: number;
+        maxWaveM: number;
+        tradeoff: string;
+    };
 
     // Laylines
     // (removed)
@@ -250,6 +359,8 @@
           }))
         : [];
 
+        $: comparisonRows = buildComparisonRows(result, alternativeResults);
+
     afterUpdate(() => {
         if (result && result.optimalPath.length > 1) {
             drawTimelineChart(windChartEl, result.optimalPath, p => p.tws, '#4dc9f6', 'kt');
@@ -267,6 +378,87 @@
         if (d > 0) return `${d}d ${h}h`;
         if (h > 0) return `${h}h ${m}m`;
         return `${m}m`;
+    }
+
+    function buildComparisonRows(primary: RouteResult | null, alternatives: RouteResult[]): ComparisonRow[] {
+        if (!primary) {
+            return [];
+        }
+
+        const rows: ComparisonRow[] = [
+            toComparisonRow(primary, 'Primary', true, null, null),
+            ...alternatives.map((alt, idx) => {
+                const label = alt.variantLabel || `Alt ${idx + 1}`;
+                return toComparisonRow(alt, label, false, idx, primary);
+            }),
+        ];
+
+        return rows;
+    }
+
+    function toComparisonRow(
+        route: RouteResult,
+        routeLabel: string,
+        primary: boolean,
+        alternativeIndex: number | null,
+        baseline: RouteResult | null,
+    ): ComparisonRow {
+        return {
+            routeLabel,
+            primary,
+            alternativeIndex,
+            objectiveLabel: route.optimizationLabel,
+            totalDistanceNm: route.metrics.totalDistanceNm,
+            totalTimeHours: route.metrics.totalTimeHours,
+            avgSpeedKt: route.metrics.avgSpeedKt,
+            motoringTimeHours: route.metrics.motoringTimeHours,
+            fuelConsumedLiters: route.metrics.fuelConsumedLiters,
+            maxWindKt: route.metrics.maxWindKt,
+            maxWaveM: route.metrics.maxWaveM,
+            tradeoff: describeTradeoff(route, baseline),
+        };
+    }
+
+    function describeTradeoff(route: RouteResult, baseline: RouteResult | null): string {
+        if (!baseline) {
+            return 'Baseline route used for map and exports';
+        }
+
+        const timeDelta = route.metrics.totalTimeHours - baseline.metrics.totalTimeHours;
+        const fuelDelta = route.metrics.fuelConsumedLiters - baseline.metrics.fuelConsumedLiters;
+        const windDelta = route.metrics.maxWindKt - baseline.metrics.maxWindKt;
+        const waveDelta = route.metrics.maxWaveM - baseline.metrics.maxWaveM;
+
+        const notes: string[] = [];
+
+        if (timeDelta <= -0.25) notes.push(`${formatSignedHours(timeDelta)} faster`);
+        if (timeDelta >= 0.25) notes.push(`${formatSignedHours(timeDelta)} slower`);
+        if (fuelDelta <= -0.2) notes.push(`${formatSigned(fuelDelta, 1)} L fuel`);
+        if (fuelDelta >= 0.2) notes.push(`${formatSigned(fuelDelta, 1)} L fuel`);
+        if (windDelta <= -0.5) notes.push(`${formatSigned(windDelta, 1)} kt max wind`);
+        if (windDelta >= 0.5) notes.push(`${formatSigned(windDelta, 1)} kt max wind`);
+        if (waveDelta <= -0.1) notes.push(`${formatSigned(waveDelta, 1)} m max waves`);
+        if (waveDelta >= 0.1) notes.push(`${formatSigned(waveDelta, 1)} m max waves`);
+
+        if (notes.length === 0) {
+            return 'Similar profile to primary route';
+        }
+
+        return notes.join(', ');
+    }
+
+    function formatSigned(value: number, digits = 1): string {
+        const sign = value > 0 ? '+' : '';
+        return `${sign}${value.toFixed(digits)}`;
+    }
+
+    function formatSignedHours(hours: number): string {
+        const abs = Math.abs(hours);
+        const sign = hours > 0 ? '+' : '';
+        if (abs >= 24) {
+            return `${sign}${(hours / 24).toFixed(1)}d`;
+        }
+        return `${sign}${hours.toFixed(1)}h`;
     }
 
     function formatTime(ts: number): string {
@@ -524,17 +716,26 @@
         gap: 8px;
         flex-wrap: wrap;
     }
-    .alt-row {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        margin-bottom: 4px;
+    .comparison-table-wrap {
+        overflow-x: auto;
     }
-    .alt-swatch {
-        width: 22px;
-        height: 3px;
-        border-radius: 2px;
-        display: inline-block;
-        flex-shrink: 0;
+    .comparison-table {
+        border-collapse: collapse;
+        width: 100%;
+        th, td {
+            border-bottom: 1px solid #333;
+            padding: 4px 6px;
+            text-align: left;
+            white-space: nowrap;
+        }
+        th {
+            position: sticky;
+            top: 0;
+            background: #222;
+            z-index: 1;
+        }
+    }
+    .primary-row {
+        background: rgba(255, 152, 0, 0.12);
     }
 </style>

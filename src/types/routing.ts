@@ -7,7 +7,13 @@ export interface Waypoint {
 }
 
 /** How to optimize the route */
-export type OptimizationMode = 'min-time' | 'arrival-deadline';
+export type OptimizationMode =
+    | 'min-time'
+    | 'min-motoring'
+    | 'min-max-wind'
+    | 'min-wave-exposure'
+    | 'comfort-balanced'
+    | 'arrival-deadline';
 
 export interface RouteConfig {
     /** Departure timestamp (ms since epoch) */
@@ -34,14 +40,12 @@ export interface RouteConfig {
     useLocalTime?: boolean;
     /** Boat configuration (polars + motor) */
     boat: BoatConfig;
+    /** Maximum true wind speed in knots; route points above this are excluded. 0 = disabled. */
+    maxWindLimitKt?: number;
     /** Maximum wave height in meters; isochrone points in higher seas are excluded. 0 = disabled. */
     maxWaveHeightM?: number;
-    /** Whether to compute alternative routes with different heading biases. */
+    /** Whether to compute alternative routes using other optimization objectives. */
     routeAlternatives?: boolean;
-    /** Heading fan bias in degrees used for each alternative route (default 25). */
-    alternativesFanBias?: number;
-    /** Internal: heading-fan bias offset for alternative route generation. */
-    headingBias?: number;
 }
 
 /** A single point on an isochrone front */
@@ -137,6 +141,31 @@ export interface RouteResult {
     departureTime: number;
     /** Whether this was an optimized departure */
     optimizedDeparture: boolean;
+    /** Optimization objective used for selecting this route. */
+    optimizationMode: OptimizationMode;
+    /** Human-readable objective label for UI. */
+    optimizationLabel: string;
+    /** Numeric score used for route ranking (lower is better). */
+    optimizationScore: number;
+    /** Label to distinguish primary route from alternatives in UI. */
+    variantLabel?: string;
+    /** Departure optimization analysis rows, ordered by tested departure time. */
+    departureAnalysis?: DepartureAnalysisRow[];
+}
+
+/** Summary row for a departure-time candidate tested during optimization. */
+export interface DepartureAnalysisRow {
+    departureTime: number;
+    arrivalTime: number;
+    totalDistanceNm: number;
+    totalTimeHours: number;
+    avgSpeedKt: number;
+    motoringTimeHours: number;
+    fuelConsumedLiters: number;
+    maxWindKt: number;
+    maxWaveM: number;
+    optimizationScore: number;
+    selected: boolean;
 }
 
 /** Progress callback for long computations */

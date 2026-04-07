@@ -96,9 +96,27 @@
             <option value={15}>15° (fast)</option>
         </select>
     </div>
+    <div class="form-row mb-5">
+        <label class="size-xs">Optimization objective:</label>
+        <select class="form-control-sm" bind:value={optimizationMode} on:change={emitChange} disabled={useDeadline}>
+            <option value={'min-time'}>Fastest arrival (default)</option>
+            <option value={'min-motoring'}>Least motoring</option>
+            <option value={'comfort-balanced'}>Balanced comfort</option>
+            <option value={'min-max-wind'}>Lower max wind</option>
+            <option value={'min-wave-exposure'}>Lower wave exposure</option>
+        </select>
+        {#if useDeadline}
+            <span class="size-xs fg-grey">Arrival deadline mode uses fastest route that still meets the deadline.</span>
+        {/if}
+    </div>
     <div class="form-row mb-10">
         <label class="size-xs">Max duration (hours):</label>
         <input class="form-control-sm" type="number" min="12" max="480" step="12" bind:value={maxDurationHours} on:change={emitChange} />
+    </div>
+    <div class="form-row mb-10">
+        <label class="size-xs">Max wind limit (kt):</label>
+        <input class="form-control-sm" type="number" min="0" max="80" step="1" bind:value={maxWindLimitKt} on:change={emitChange} />
+        <span class="size-xs fg-grey">Default 25 kt, set 0 to disable.</span>
     </div>
     <div class="form-row mb-5">
         <label class="size-xs">
@@ -121,18 +139,11 @@
             Compute alternative routes
         </label>
     </div>
-    {#if routeAlternatives}
-        <div class="form-row mb-10 indent">
-            <label class="size-xs">Heading bias (°):</label>
-            <input class="form-control-sm" type="number" min="5" max="60" step="5" bind:value={alternativesFanBias} on:change={emitChange} />
-            <span class="size-xs fg-grey">Fan offset per alternative</span>
-        </div>
-    {/if}
 </div>
 
 <script lang="ts">
     import { createEventDispatcher, onMount } from 'svelte';
-    import type { RouteConfig } from '../types/routing';
+    import type { RouteConfig, OptimizationMode } from '../types/routing';
     import type { MotorConfig } from '../types/polar';
     import { DEFAULT_MOTOR_CONFIG } from '../types/polar';
 
@@ -161,13 +172,14 @@
     let product = 'ecmwf';
     let timeStepHours = 1;
     let angularResolution = 10;
+    let optimizationMode: OptimizationMode = 'min-time';
     let maxDurationHours = 168; // 7 days
+    let maxWindLimitKt = 25;
 
     // Safety & alternatives
     let useWaveLimit = false;
     let maxWaveHeightM = 4.0;
     let routeAlternatives = false;
-    let alternativesFanBias = 25;
 
     onMount(() => {
         applyValue(value);
@@ -188,6 +200,9 @@
         departureStepHours = next.departureStepHours ?? departureStepHours;
 
         useDeadline = next.mode === 'arrival-deadline';
+        if (next.mode && next.mode !== 'arrival-deadline') {
+            optimizationMode = next.mode;
+        }
         if (typeof next.arrivalDeadline === 'number') {
             deadlineDateStr = formatInputDate(next.arrivalDeadline, useLocalTime);
         }
@@ -196,11 +211,11 @@
         timeStepHours = next.timeStepHours ?? timeStepHours;
         angularResolution = next.angularResolution ?? angularResolution;
         maxDurationHours = next.maxDurationHours ?? maxDurationHours;
+        maxWindLimitKt = next.maxWindLimitKt ?? maxWindLimitKt;
 
         useWaveLimit = typeof next.maxWaveHeightM === 'number' && next.maxWaveHeightM > 0;
         maxWaveHeightM = next.maxWaveHeightM || 4.0;
         routeAlternatives = next.routeAlternatives ?? routeAlternatives;
-        alternativesFanBias = next.alternativesFanBias ?? alternativesFanBias;
 
         const nextMotor = next.motor;
         if (nextMotor) {
@@ -260,16 +275,16 @@
             timeStepHours,
             angularResolution,
             maxDurationHours,
-            mode: useDeadline ? 'arrival-deadline' : 'min-time',
+            mode: useDeadline ? 'arrival-deadline' : optimizationMode,
             arrivalDeadline: useDeadline ? parseInputDate(deadlineDateStr, useLocalTime) : undefined,
             optimizeDeparture,
             departureWindowHours,
             departureStepHours,
             product,
             useLocalTime,
+            maxWindLimitKt,
             maxWaveHeightM: useWaveLimit ? maxWaveHeightM : 0,
             routeAlternatives,
-            alternativesFanBias,
             motor: {
                 enabled: motorEnabled,
                 motorSpeed,
@@ -287,16 +302,16 @@
             timeStepHours,
             angularResolution,
             maxDurationHours,
-            mode: useDeadline ? 'arrival-deadline' : 'min-time',
+            mode: useDeadline ? 'arrival-deadline' : optimizationMode,
             arrivalDeadline: useDeadline ? parseInputDate(deadlineDateStr, useLocalTime) : undefined,
             optimizeDeparture,
             departureWindowHours,
             departureStepHours,
             product,
             useLocalTime,
+            maxWindLimitKt,
             maxWaveHeightM: useWaveLimit ? maxWaveHeightM : 0,
             routeAlternatives,
-            alternativesFanBias,
             motor: {
                 enabled: motorEnabled,
                 motorSpeed,
