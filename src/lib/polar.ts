@@ -25,11 +25,16 @@ export function interpolateBoatSpeed(polar: PolarDiagram, twa: number, tws: numb
     // Find TWA bracket
     let twaLo = 0;
     let twaHi = twaValues.length - 1;
-    for (let i = 0; i < twaValues.length - 1; i++) {
-        if (twa >= twaValues[i] && twa <= twaValues[i + 1]) {
-            twaLo = i;
-            twaHi = i + 1;
-            break;
+    if (twa >= twaValues[twaValues.length - 1]) {
+        twaLo = twaValues.length - 1;
+        twaHi = twaValues.length - 1;
+    } else {
+        for (let i = 0; i < twaValues.length - 1; i++) {
+            if (twa >= twaValues[i] && twa <= twaValues[i + 1]) {
+                twaLo = i;
+                twaHi = i + 1;
+                break;
+            }
         }
     }
 
