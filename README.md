@@ -1,58 +1,110 @@
-# Windy Plugin Template
+# ⛵ Windy Weather Router
 
-Template for development of Windy Plugins.
+A [Windy.com](https://www.windy.com) plugin for sailboat weather routing using the **isochrone method**. Plan offshore passages with real forecast data from ECMWF, GFS, or ICON, taking into account your boat's polar diagram, land masses, custom no-go zones, and optional motor/sail hybrid strategies.
 
-**Documentation at: [https://docs.windy-plugins.com/](https://docs.windy-plugins.com/)**
+**Repository:** <https://github.com/alessandropalla/windy-plugin-weather-router>
 
-**Documentation for the Leaflet GL library is at [https://windycom.github.io/LeafletGL/docs/](https://windycom.github.io/LeafletGL/docs/)**
+**Windy Plugin API docs:** <https://docs.windy-plugins.com/>
 
-## Quick start
+---
 
-- Install dependencies with `npm i`
-- Compile the plugin in watch mode with `npm start`
-- Navigate to <https://www.windy.com/developer-mode>
-- Load your plugin from the URL <https://localhost:9999/plugin.js>
-- Code away!
+## Features
 
-For running the examples:
+### Route Planning (Route tab)
+- Place waypoints by clicking the map; reorder or remove them via the waypoint panel
+- Draw custom **no-go zones** as polygons directly on the map (areas the router will avoid)
+- Automatic **land avoidance** using an elevation grid
 
-- Build the desired example in watch mode with `npm run example01` (or `example02`, etc.)
-- Load the example in Windy's developer mode using the URL <https://localhost:9999/example01/plugin.js>
+### Boat Polars (Polars tab)
+- Built-in polar editor to define your boat's speed at each True Wind Angle / True Wind Speed combination
+- Supports sail/motor hybrid configurations
 
-## Known issues
+### Routing Settings (Settings tab)
+- **Departure time** — enter manually in UTC or local browser time
+- **Departure optimization** — test a configurable time window and step to find the fastest start time
+- **Arrival deadline** — constrain the route to arrive before a given time
+- **Motor settings** — enable motoring below a wind-speed threshold, set motor speed, fuel burn rate, and maximum motoring hours
+- **Forecast model** — choose between ECMWF, GFS, ICON, or ICON-EU
+- **Time step** — 0.5 h (fine) to 3 h (very fast)
+- **Heading resolution** — 5°, 10°, or 15° angular resolution for the isochrone fan
+- **Maximum route duration** — cap the search horizon
+- **Wave height limit** — discard route segments that exceed a set wave height
+- **Alternative routes** — compute a fan of routes with a configurable heading bias; displayed with a colour legend
 
-- In *example03* the boat orientation resets after the user zooms.
-This is likely related to Leaflet GL executing `zoom` events in slightly different order.
-Markers now also internally subscribe to the map's `zoom` event to update their CSS positioning,
-which likely executes *after* the user's `zoom` event in this example.
-- In *example04* map clicks within the rendered cycle do not fire the `singleclick` event, as they have before Leaflet LG.
+### Results (Results tab)
+- **Route summary card** — total distance (nm), duration, average speed, max wind, max wave height, departure and arrival times
+- **Motoring summary** — total motoring time, distance, and estimated fuel consumed (litres)
+- **Leg breakdown table** — per-leg distance, time, average/max wind, average speed, and motoring percentage
+- **Timeline charts** — wind speed, boat speed, True Wind Angle, and wave height plotted over the voyage
+- **Timeline data table** — full numeric export of the same series
+- **Route animation** — play/pause/speed controls to animate the boat along the computed route on the map
+- **Isochrone toggle** — show or hide the isochrone fronts used during computation
+- **GPX / JSON export** — download the route for use in other navigation tools
+
+---
+
+## Getting Started
+
+### Prerequisites
+
+- Node.js ≥ 18
+- A Windy account (free)
+
+### Install & run
+
+```bash
+npm i
+npm start          # compiles in watch mode and serves on https://localhost:9999
+```
+
+> **Windows users:** if `npm start` fails due to `rm -rf`, use `npm run build:win` for one-off builds.
+
+Then open Windy's developer mode and load the plugin:
+
+1. Navigate to https://www.windy.com/developer-mode
+2. Enter `https://localhost:9999/plugin.js` and click **Load**
+3. The ⛵ Weather Router button appears in the right-hand panel
+
+---
+
+## Project Structure
+
+```
+src/
+  plugin.svelte          # Root component — tab shell and map integration
+  pluginConfig.ts        # Plugin metadata (name, icon, UI mode)
+  components/
+    WaypointPanel.svelte  # Waypoint list and map-click capture
+    PolarEditor.svelte    # Boat polar diagram editor
+    SettingsPanel.svelte  # All routing configuration inputs
+    ResultsPanel.svelte   # Summary, charts, tables, animation, export
+  lib/
+    routing.ts            # Isochrone routing engine
+    windgrid.ts           # Wind & elevation grid fetching and lookup
+    polar.ts              # Polar interpolation
+    nogozones.ts          # No-go zone polygon intersection
+    waypoints.ts          # Waypoint persistence helpers
+    geo.ts                # Geodesic distance, bearing, TWA utilities
+  types/
+    routing.ts            # Route, waypoint, isochrone, metrics types
+    polar.ts              # Polar diagram and motor config types
+```
+
+---
 
 ## CHANGELOG
 
--   5.0.0
-    -   Updated example code for the new Leaflet GL map library introduced in client v49.0.0
--   4.2.2
-    -   New plugins are marked as private by default
--   4.2.1
-    -   Updated `@windycom/plugin-devtools` for client v46.1.0
--   4.2.0
-    -   Fixed compiler sourcemap error
--   4.1.0
-    -   Updated plugin upload URL
--   4.0.0
-    -   Updated `@windycom/plugin-devtools` for client v45.0.0
--   3.0.0
-    -   Updated `@windycom/plugin-devtools` for client v42.2.0
--   2.0.0
-    -   Completely new version of the plugin system based in Windy client v42+
--   1.0.0
-    -   New rollup compiler, no more riot architecture
-    -   Updated examples for Windy client v39
--   0.4.0
-    -   Added `plugin-data-loader` to the Plugins API
--   0.3.0
-    -   Examples moved to examples dir
--   0.2.0
-    -   Fixed wrong examples
--   0.1.1
-    -   Initial version of this repo
+-   0.1.0
+    -   Initial release of the Weather Router plugin
+    -   Isochrone routing engine with multi-waypoint support
+    -   Polar diagram editor
+    -   Departure-time optimization
+    -   Motor/sail hybrid strategy with fuel tracking
+    -   Land avoidance via elevation grid
+    -   No-go zone polygon drawing
+    -   Wave height routing constraint
+    -   Alternative routes with heading fan
+    -   Route animation controls
+    -   Timeline charts (wind, speed, TWA, waves)
+    -   Timeline data table and route export
+    -   Saved settings across sessions
