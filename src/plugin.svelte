@@ -243,11 +243,6 @@
         waypointPanel.addWaypoint(latLon.lat, latLon.lon);
     }
 
-    function onLeafletMapClick(event: L.LeafletMouseEvent) {
-        if (!event?.latlng) return;
-        onMapClick({ lat: event.latlng.lat, lon: event.latlng.lng });
-    }
-
     // --- Waypoint markers on map ---
     function drawWaypointMarkers(wps: Waypoint[]) {
         // Remove old markers
@@ -703,12 +698,10 @@
 
     onMount(() => {
         singleclick.on(name, onMapClick);
-        map.on('click', onLeafletMapClick);
     });
 
     onDestroy(() => {
         singleclick.off(name, onMapClick);
-        map.off('click', onLeafletMapClick);
         removeAllMapLayers();
     });
 </script>
