@@ -155,7 +155,9 @@
                         placeholder="e.g., My Sailing Boat"
                     />
                 </div>
-feet):</label>
+
+                <div class="form-group">
+                    <label for="boatLength">Boat Length (feet):</label>
                     <input
                         type="number"
                         id="boatLength"
@@ -165,9 +167,7 @@ feet):</label>
                         step="1"
                     />
                     <div class="length-info">
-                        Length affects performance scaling. Default is 35 feet
-                    <div class="length-info">
-                        Length affects performance scaling. Default is 10 meters.
+                        Length affects performance scaling. Default is 35 feet.
                     </div>
                 </div>
 
