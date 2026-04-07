@@ -36,6 +36,8 @@ export interface MotorConfig {
     windThreshold: number;
     /** Maximum hours of motoring allowed (0 = unlimited) */
     maxMotorHours: number;
+    /** Fuel burn in liters per hour while motoring */
+    fuelBurnLph: number;
 }
 
 /** Combined boat configuration */
@@ -55,4 +57,5 @@ export const DEFAULT_MOTOR_CONFIG: MotorConfig = {
     motorSpeed: 5.0,
     windThreshold: 4.0,
     maxMotorHours: 0,
+    fuelBurnLph: 2.0,
 };

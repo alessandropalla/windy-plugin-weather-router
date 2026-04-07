@@ -30,6 +30,8 @@ export interface RouteConfig {
     departureStepHours: number;
     /** Forecast model to use */
     product: string;
+    /** UI time mode for inputs and chart labels */
+    useLocalTime?: boolean;
     /** Boat configuration (polars + motor) */
     boat: BoatConfig;
 }
@@ -85,6 +87,7 @@ export interface RouteMetrics {
     maxGustKt: number;
     motoringTimeHours: number;
     motoringDistanceNm: number;
+    fuelConsumedLiters: number;
     /** Per-leg breakdown */
     legs: LegMetrics[];
 }

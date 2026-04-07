@@ -37,7 +37,7 @@
         <button
             class="button button--variant-orange"
             class:button--loading={computing}
-            disabled={!canCompute}
+            disabled={computing}
             on:click={runRouting}
         >
             {computing ? 'Computing...' : 'Compute Weather Route'}
@@ -76,6 +76,7 @@
     {:else if activeTab === 'results'}
         <ResultsPanel
             result={routeResult}
+            useLocalTime={Boolean(settingsCache.useLocalTime)}
             on:toggleIsochrones={e => toggleIsochroneDisplay(e.detail)}
         />
     {/if}
@@ -148,7 +149,7 @@
     let isochroneLines: L.Polyline[] = [];
     let showIsochrones = false;
 
-    $: canCompute = waypoints.length >= 2 && currentPolar !== null && !computing;
+    $: canCompute = waypoints.length >= 2 && currentPolar !== null;
 
     // --- Reactive: redraw map layers when waypoints change ---
     $: drawWaypointMarkers(waypoints);
@@ -239,7 +240,16 @@
 
     // --- Routing ---
     async function runRouting() {
-        if (!currentPolar || waypoints.length < 2) return;
+        if (waypoints.length < 2) {
+            errorMsg = 'Please add at least 2 waypoints before computing.';
+            return;
+        }
+
+        if (!currentPolar) {
+            errorMsg = 'Please select or import a polar in the Polars tab before computing.';
+            activeTab = 'polars';
+            return;
+        }
 
         computing = true;
         progressMsg = 'Fetching wind data...';

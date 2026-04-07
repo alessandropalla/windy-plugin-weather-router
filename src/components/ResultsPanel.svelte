@@ -35,7 +35,7 @@
             </div>
             {#if result.metrics.motoringTimeHours > 0}
                 <div class="motor-info mt-5 size-xs">
-                    ⚙ Motoring: {formatDuration(result.metrics.motoringTimeHours)} ({result.metrics.motoringDistanceNm.toFixed(1)} nm)
+                    ⚙ Motoring: {formatDuration(result.metrics.motoringTimeHours)} ({result.metrics.motoringDistanceNm.toFixed(1)} nm), Fuel: {result.metrics.fuelConsumedLiters.toFixed(1)} L
                 </div>
             {/if}
             {#if result.optimizedDeparture}
@@ -81,6 +81,7 @@
         <!-- Timeline Charts -->
         <div class="mb-15">
             <div class="size-s mb-5">Route Timeline</div>
+            <div class="size-xs fg-grey mb-5">X-axis: {useLocalTime ? 'Local time' : 'UTC time'} (tick = 1 hour)</div>
             <div class="chart-label size-xs fg-grey">Wind Speed (kt)</div>
             <svg bind:this={windChartEl} class="timeline-chart"></svg>
             <div class="chart-label size-xs fg-grey mt-10">Boat Speed (kt)</div>
@@ -106,6 +107,7 @@
     const dispatch = createEventDispatcher<{ toggleIsochrones: boolean }>();
 
     export let result: RouteResult | null = null;
+    export let useLocalTime = false;
 
     let windChartEl: SVGSVGElement;
     let speedChartEl: SVGSVGElement;
@@ -132,6 +134,9 @@
     function formatTime(ts: number): string {
         if (!ts) return '--';
         const d = new Date(ts);
+        if (useLocalTime) {
+            return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+        }
         return `${d.getUTCMonth() + 1}/${d.getUTCDate()} ${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}Z`;
     }
 
@@ -146,15 +151,25 @@
         svg.innerHTML = '';
 
         const width = svg.clientWidth || 280;
-        const height = 60;
+        const height = 110;
         svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
 
-        const margin = { left: 30, right: 5, top: 5, bottom: 15 };
+        const margin = { left: 38, right: 8, top: 8, bottom: 30 };
         const w = width - margin.left - margin.right;
         const h = height - margin.top - margin.bottom;
 
         const times = path.map(p => p.time);
         const values = path.map(valueFn);
+
+        // The first route point is the algorithm seed and often has 0-valued metrics.
+        // Replace that artificial leading zero with the first meaningful sample.
+        if (values.length > 1 && values[0] === 0) {
+            const firstNonZero = values.find(v => v > 0);
+            if (typeof firstNonZero === 'number') {
+                values[0] = firstNonZero;
+            }
+        }
+
         const minT = times[0];
         const maxT = times[times.length - 1];
         const maxV = Math.max(...values, 1);
@@ -189,7 +204,7 @@
             const label = createSvgEl('text');
             label.setAttribute('x', String(margin.left - 3));
             label.setAttribute('y', String(yScale(v) + 3));
-            label.setAttribute('font-size', '7');
+            label.setAttribute('font-size', '9');
             label.setAttribute('fill', '#888');
             label.setAttribute('text-anchor', 'end');
             label.textContent = String(Math.round(v));
@@ -205,21 +220,48 @@
         polyline.setAttribute('stroke-width', '1.5');
         svg.appendChild(polyline);
 
-        // Time axis labels
-        const totalH = (maxT - minT) / 3600000;
-        const tickStep = totalH <= 24 ? 6 : totalH <= 72 ? 12 : 24;
-        for (let h = 0; h <= totalH; h += tickStep) {
-            const t = minT + h * 3600000;
+        // Hourly vertical ticks and labels
+        const hourMs = 3600 * 1000;
+        const firstHourTick = Math.ceil(minT / hourMs) * hourMs;
+        for (let t = firstHourTick; t <= maxT; t += hourMs) {
+            const grid = createSvgEl('line');
+            grid.setAttribute('x1', String(xScale(t)));
+            grid.setAttribute('y1', String(margin.top));
+            grid.setAttribute('x2', String(xScale(t)));
+            grid.setAttribute('y2', String(height - margin.bottom));
+            grid.setAttribute('stroke', '#2f2f43');
+            grid.setAttribute('stroke-width', '0.6');
+            svg.appendChild(grid);
+
             const d = new Date(t);
             const label = createSvgEl('text');
             label.setAttribute('x', String(xScale(t)));
-            label.setAttribute('y', String(height - 2));
-            label.setAttribute('font-size', '6');
+            label.setAttribute('y', String(height - 12));
+            label.setAttribute('font-size', '7');
             label.setAttribute('fill', '#888');
             label.setAttribute('text-anchor', 'middle');
-            label.textContent = `${d.getUTCDate()}/${d.getUTCHours()}h`;
+            if (useLocalTime) {
+                const isMidnight = d.getHours() === 0;
+                label.textContent = isMidnight
+                    ? `${d.getMonth() + 1}/${d.getDate()} 00`
+                    : `${String(d.getHours()).padStart(2, '0')}`;
+            } else {
+                const isMidnightUtc = d.getUTCHours() === 0;
+                label.textContent = isMidnightUtc
+                    ? `${d.getUTCMonth() + 1}/${d.getUTCDate()} 00Z`
+                    : `${String(d.getUTCHours()).padStart(2, '0')}Z`;
+            }
             svg.appendChild(label);
         }
+
+        const xAxisLabel = createSvgEl('text');
+        xAxisLabel.setAttribute('x', String(margin.left + w / 2));
+        xAxisLabel.setAttribute('y', String(height - 2));
+        xAxisLabel.setAttribute('font-size', '8');
+        xAxisLabel.setAttribute('fill', '#999');
+        xAxisLabel.setAttribute('text-anchor', 'middle');
+        xAxisLabel.textContent = useLocalTime ? 'Local time' : 'UTC time';
+        svg.appendChild(xAxisLabel);
     }
 
     function createSvgEl(tag: string): SVGElement {
@@ -281,7 +323,7 @@
     }
     .timeline-chart {
         width: 100%;
-        height: 60px;
+        height: 110px;
         background: #1a1a2e;
         border-radius: 4px;
     }

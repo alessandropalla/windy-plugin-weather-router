@@ -1,8 +1,14 @@
 <div class="settings-panel">
     <h3 class="size-s mb-10">Departure</h3>
     <div class="form-row mb-5">
-        <label class="size-xs">Date & Time (UTC):</label>
+        <label class="size-xs">Date & Time ({useLocalTime ? 'Local' : 'UTC'}):</label>
         <input class="form-control mt-3" type="datetime-local" bind:value={departureDateStr} on:change={onDepartureChange} />
+    </div>
+    <div class="form-row mb-10">
+        <label class="size-xs">
+            <input type="checkbox" checked={useLocalTime} on:change={onTimeModeChange} />
+            Use local time (browser timezone)
+        </label>
     </div>
     <div class="form-row mb-10">
         <label class="size-xs">
@@ -29,7 +35,7 @@
     </div>
     {#if useDeadline}
         <div class="form-row mb-10 indent">
-            <label class="size-xs">Arrive by (UTC):</label>
+            <label class="size-xs">Arrive by ({useLocalTime ? 'Local' : 'UTC'}):</label>
             <input class="form-control mt-3" type="datetime-local" bind:value={deadlineDateStr} on:change={onDeadlineChange} />
         </div>
     {/if}
@@ -46,6 +52,10 @@
         <div class="form-row mb-5 indent">
             <label class="size-xs">Motor speed (kt):</label>
             <input class="form-control-sm" type="number" min="1" max="20" step="0.5" bind:value={motorSpeed} on:change={emitChange} />
+        </div>
+        <div class="form-row mb-5 indent">
+            <label class="size-xs">Fuel burn (L/h):</label>
+            <input class="form-control-sm" type="number" min="0.1" max="100" step="0.1" bind:value={fuelBurnLph} on:change={emitChange} />
         </div>
         <div class="form-row mb-5 indent">
             <label class="size-xs">Wind threshold (kt):</label>
@@ -102,18 +112,20 @@
     export let value: (Partial<RouteConfig> & { motor?: Partial<MotorConfig> }) | null = null;
 
     // Departure
-    let departureDateStr = toDatetimeLocal(Date.now() + 3600 * 1000); // 1h from now
+    let useLocalTime = false;
+    let departureDateStr = formatInputDate(Date.now() + 3600 * 1000, useLocalTime); // 1h from now
     let optimizeDeparture = false;
     let departureWindowHours = 72;
     let departureStepHours = 6;
 
     // Deadline
     let useDeadline = false;
-    let deadlineDateStr = toDatetimeLocal(Date.now() + 7 * 24 * 3600 * 1000);
+    let deadlineDateStr = formatInputDate(Date.now() + 7 * 24 * 3600 * 1000, useLocalTime);
 
     // Motor
     let motorEnabled = DEFAULT_MOTOR_CONFIG.enabled;
     let motorSpeed = DEFAULT_MOTOR_CONFIG.motorSpeed;
+    let fuelBurnLph = DEFAULT_MOTOR_CONFIG.fuelBurnLph;
     let windThreshold = DEFAULT_MOTOR_CONFIG.windThreshold;
     let maxMotorHours = DEFAULT_MOTOR_CONFIG.maxMotorHours;
 
@@ -130,8 +142,12 @@
     function applyValue(next: (Partial<RouteConfig> & { motor?: Partial<MotorConfig> }) | null) {
         if (!next) return;
 
+        if (typeof next.useLocalTime === 'boolean') {
+            useLocalTime = next.useLocalTime;
+        }
+
         if (typeof next.departureTime === 'number') {
-            departureDateStr = toDatetimeLocal(next.departureTime);
+            departureDateStr = formatInputDate(next.departureTime, useLocalTime);
         }
         optimizeDeparture = next.optimizeDeparture ?? optimizeDeparture;
         departureWindowHours = next.departureWindowHours ?? departureWindowHours;
@@ -139,7 +155,7 @@
 
         useDeadline = next.mode === 'arrival-deadline';
         if (typeof next.arrivalDeadline === 'number') {
-            deadlineDateStr = toDatetimeLocal(next.arrivalDeadline);
+            deadlineDateStr = formatInputDate(next.arrivalDeadline, useLocalTime);
         }
 
         product = next.product ?? product;
@@ -151,14 +167,44 @@
         if (nextMotor) {
             motorEnabled = nextMotor.enabled ?? motorEnabled;
             motorSpeed = nextMotor.motorSpeed ?? motorSpeed;
+            fuelBurnLph = nextMotor.fuelBurnLph ?? fuelBurnLph;
             windThreshold = nextMotor.windThreshold ?? windThreshold;
             maxMotorHours = nextMotor.maxMotorHours ?? maxMotorHours;
         }
     }
 
-    function toDatetimeLocal(ts: number): string {
+    function pad2(v: number): string {
+        return String(v).padStart(2, '0');
+    }
+
+    function formatInputDate(ts: number, isLocal: boolean): string {
         const d = new Date(ts);
-        return d.toISOString().slice(0, 16);
+        if (isLocal) {
+            return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+        }
+        return `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}T${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}`;
+    }
+
+    function parseInputDate(value: string, isLocal: boolean): number {
+        if (!value) return Date.now();
+        const date = isLocal ? new Date(value) : new Date(`${value}Z`);
+        const ts = date.getTime();
+        return Number.isFinite(ts) ? ts : Date.now();
+    }
+
+    function onTimeModeChange(e: Event) {
+        const nextMode = (e.target as HTMLInputElement).checked;
+        if (nextMode === useLocalTime) {
+            return;
+        }
+
+        const departureTs = parseInputDate(departureDateStr, useLocalTime);
+        const deadlineTs = parseInputDate(deadlineDateStr, useLocalTime);
+
+        useLocalTime = nextMode;
+        departureDateStr = formatInputDate(departureTs, useLocalTime);
+        deadlineDateStr = formatInputDate(deadlineTs, useLocalTime);
+        emitChange();
     }
 
     function onDepartureChange() {
@@ -171,19 +217,21 @@
 
     function emitChange() {
         dispatch('change', {
-            departureTime: new Date(departureDateStr + 'Z').getTime(),
+            departureTime: parseInputDate(departureDateStr, useLocalTime),
             timeStepHours,
             angularResolution,
             maxDurationHours,
             mode: useDeadline ? 'arrival-deadline' : 'min-time',
-            arrivalDeadline: useDeadline ? new Date(deadlineDateStr + 'Z').getTime() : undefined,
+            arrivalDeadline: useDeadline ? parseInputDate(deadlineDateStr, useLocalTime) : undefined,
             optimizeDeparture,
             departureWindowHours,
             departureStepHours,
             product,
+            useLocalTime,
             motor: {
                 enabled: motorEnabled,
                 motorSpeed,
+                fuelBurnLph,
                 windThreshold,
                 maxMotorHours,
             },
@@ -193,19 +241,21 @@
     /** Export current settings as a RouteConfig-compatible object */
     export function getSettings(): Partial<RouteConfig> & { motor: MotorConfig } {
         return {
-            departureTime: new Date(departureDateStr + 'Z').getTime(),
+            departureTime: parseInputDate(departureDateStr, useLocalTime),
             timeStepHours,
             angularResolution,
             maxDurationHours,
             mode: useDeadline ? 'arrival-deadline' : 'min-time',
-            arrivalDeadline: useDeadline ? new Date(deadlineDateStr + 'Z').getTime() : undefined,
+            arrivalDeadline: useDeadline ? parseInputDate(deadlineDateStr, useLocalTime) : undefined,
             optimizeDeparture,
             departureWindowHours,
             departureStepHours,
             product,
+            useLocalTime,
             motor: {
                 enabled: motorEnabled,
                 motorSpeed,
+                fuelBurnLph,
                 windThreshold,
                 maxMotorHours,
             },

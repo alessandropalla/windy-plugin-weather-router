@@ -1,4 +1,13 @@
-import type { PolarDiagram, MotorConfig } from '../types/polar';
+import { getWindAtPointAndTime } from './windgrid';
+import { interpolateBoatSpeed } from './polar';
+import {
+    distanceNm,
+    bearing,
+    destinationPoint,
+    computeTWA,
+    normalizeAngle,
+} from './geo';
+import type { MotorConfig } from '../types/polar';
 import type {
     Waypoint,
     RouteConfig,
@@ -10,15 +19,6 @@ import type {
     RoutingProgress,
 } from '../types/routing';
 import type { WindGrid } from './windgrid';
-import { getWindAtPointAndTime } from './windgrid';
-import { interpolateBoatSpeed } from './polar';
-import {
-    distanceNm,
-    bearing,
-    destinationPoint,
-    computeTWA,
-    normalizeAngle,
-} from './geo';
 
 const ARRIVAL_RADIUS_NM = 2; // Consider arrived when within this radius of destination
 
@@ -123,14 +123,18 @@ export function computeRoute(
                 }
 
                 // Skip if not moving
-                if (boatSpeed < 0.1) continue;
+                if (boatSpeed < 0.1) {
+                    continue;
+                }
 
                 // Compute new position
                 const distTraveled = boatSpeed * timeStepHours;
                 const [newLat, newLon] = destinationPoint(parent.lat, parent.lon, hdg, distTraveled);
 
                 // Check bounds (simple sanity check)
-                if (Math.abs(newLat) > 85) continue;
+                if (Math.abs(newLat) > 85) {
+                    continue;
+                }
 
                 const newPoint: IsochronePoint = {
                     lat: newLat,
@@ -164,7 +168,9 @@ export function computeRoute(
                 nextFront.push(newPoint);
             }
 
-            if (arrivedPoint) break;
+            if (arrivedPoint) {
+                break;
+            }
         }
 
         if (arrivedPoint) {
@@ -186,8 +192,31 @@ export function computeRoute(
     // Backtrack to find optimal path
     const optimalPath = backtrack(allFronts, arrivedPoint);
 
+    // Ensure path starts/ends exactly on requested waypoints.
+    if (optimalPath.length > 0) {
+        const first = optimalPath[0];
+        optimalPath[0] = {
+            ...first,
+            lat: waypoints[0].lat,
+            lon: waypoints[0].lon,
+            waypointIndex: Math.max(1, first.waypointIndex),
+        };
+
+        const last = optimalPath[optimalPath.length - 1];
+        optimalPath[optimalPath.length - 1] = {
+            ...last,
+            lat: waypoints[waypoints.length - 1].lat,
+            lon: waypoints[waypoints.length - 1].lon,
+            waypointIndex: waypoints.length - 1,
+        };
+    }
+
+    if (optimalPath.length < 2) {
+        throw new Error('No feasible route found with the current settings and forecast window');
+    }
+
     // Compute metrics
-    const metrics = computeMetrics(optimalPath, waypoints);
+    const metrics = computeMetrics(optimalPath, waypoints, config.boat.motor);
 
     return {
         optimalPath,
@@ -313,7 +342,9 @@ function pruneIsochrone(
         }
 
         for (const s of sectors) {
-            if (s) pruned.push(s);
+            if (s) {
+                pruned.push(s);
+            }
         }
     }
 
@@ -325,16 +356,22 @@ function backtrack(
     allFronts: IsochroneFront[],
     arrivedPoint: IsochronePoint | null,
 ): IsochronePoint[] {
-    if (!arrivedPoint || allFronts.length < 2) return [];
+    if (!arrivedPoint || allFronts.length < 2) {
+        return [];
+    }
 
     const path: IsochronePoint[] = [arrivedPoint];
     let current = arrivedPoint;
 
     // Walk backwards through fronts
     for (let fi = allFronts.length - 2; fi >= 0; fi--) {
-        if (current.parentIndex < 0) break;
+        if (current.parentIndex < 0) {
+            break;
+        }
         const parent = allFronts[fi][current.parentIndex];
-        if (!parent) break;
+        if (!parent) {
+            break;
+        }
         path.unshift(parent);
         current = parent;
     }
@@ -343,7 +380,7 @@ function backtrack(
 }
 
 /** Compute route metrics from the optimal path */
-function computeMetrics(path: IsochronePoint[], waypoints: Waypoint[]): RouteMetrics {
+function computeMetrics(path: IsochronePoint[], waypoints: Waypoint[], motor: MotorConfig): RouteMetrics {
     if (path.length === 0) {
         return {
             totalDistanceNm: 0,
@@ -354,6 +391,7 @@ function computeMetrics(path: IsochronePoint[], waypoints: Waypoint[]): RouteMet
             maxGustKt: 0,
             motoringTimeHours: 0,
             motoringDistanceNm: 0,
+            fuelConsumedLiters: 0,
             legs: [],
         };
     }
@@ -377,8 +415,12 @@ function computeMetrics(path: IsochronePoint[], waypoints: Waypoint[]): RouteMet
         const segDist = distanceNm(prev.lat, prev.lon, curr.lat, curr.lon);
         totalDistanceNm += segDist;
 
-        if (curr.tws > maxWind) maxWind = curr.tws;
-        if (curr.tws > maxGust) maxGust = curr.tws; // gust tracked separately if available
+        if (curr.tws > maxWind) {
+            maxWind = curr.tws;
+        }
+        if (curr.tws > maxGust) {
+            maxGust = curr.tws;
+        } // gust tracked separately if available
 
         if (curr.isMotoring) {
             const segTime = (curr.time - prev.time) / (3600 * 1000);
@@ -398,7 +440,9 @@ function computeMetrics(path: IsochronePoint[], waypoints: Waypoint[]): RouteMet
     const legs: LegMetrics[] = [];
     for (const [wpIdx, data] of legData) {
         const pts = data.points;
-        if (pts.length === 0) continue;
+        if (pts.length === 0) {
+            continue;
+        }
 
         let legDist = 0;
         let legMotorDist = 0;
@@ -410,12 +454,16 @@ function computeMetrics(path: IsochronePoint[], waypoints: Waypoint[]): RouteMet
             const p = pts[i];
             windSum += p.tws;
             speedSum += p.boatSpeed;
-            if (p.tws > legMaxWind) legMaxWind = p.tws;
+            if (p.tws > legMaxWind) {
+                legMaxWind = p.tws;
+            }
 
             if (i > 0) {
                 const d = distanceNm(pts[i - 1].lat, pts[i - 1].lon, p.lat, p.lon);
                 legDist += d;
-                if (p.isMotoring) legMotorDist += d;
+                if (p.isMotoring) {
+                    legMotorDist += d;
+                }
             }
         }
 
@@ -445,6 +493,7 @@ function computeMetrics(path: IsochronePoint[], waypoints: Waypoint[]): RouteMet
         maxGustKt: maxGust,
         motoringTimeHours: motoringHours,
         motoringDistanceNm: motoringDist,
+        fuelConsumedLiters: motoringHours * Math.max(0, motor.fuelBurnLph),
         legs,
     };
 }

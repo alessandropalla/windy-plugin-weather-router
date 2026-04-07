@@ -20,6 +20,7 @@
             <button class="button button--variant-ghost size-xs" on:click={createNew}>New</button>
             <button class="button button--variant-ghost size-xs" on:click={loadExample}>Load Example</button>
             {#if selectedPolarName}
+                <button class="button button--variant-ghost size-xs" on:click={renameSelected}>Rename</button>
                 <button class="button button--variant-ghost size-xs" on:click={deleteSelected}>Delete</button>
                 <button class="button button--variant-ghost size-xs" on:click={exportCSV}>Export CSV</button>
             {/if}
@@ -169,6 +170,19 @@
         }
     }
 
+    function renameSelected() {
+        if (!polar || !selectedPolarName) return;
+        const nextName = (prompt('New polar name:', selectedPolarName) || '').trim();
+        if (!nextName || nextName === selectedPolarName) return;
+
+        deletePolar(selectedPolarName);
+        polar = { ...polar, name: nextName };
+        savePolar(polar);
+        selectedPolarName = nextName;
+        refreshPolarList();
+        dispatch('change', polar);
+    }
+
     function exportCSV() {
         if (!polar) return;
         const csv = polarToCSV(polar);
@@ -271,28 +285,51 @@
             svgEl.appendChild(label);
         }
 
-        // Draw radial lines for key TWAs
+        // Draw radial lines for key TWAs (starboard and port)
         for (const twa of [0, 30, 60, 90, 120, 150, 180]) {
-            const rad = (twa - 90) * Math.PI / 180;
-            const x = Math.cos(rad) * 110;
-            const y = Math.sin(rad) * 110;
+            const theta = twa * Math.PI / 180;
+            const xS = Math.sin(theta) * 110;
+            const yS = -Math.cos(theta) * 110;
+            const xP = -xS;
+            const yP = yS;
+
             const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
             line.setAttribute('x1', '0');
             line.setAttribute('y1', '0');
-            line.setAttribute('x2', String(x));
-            line.setAttribute('y2', String(y));
+            line.setAttribute('x2', String(xS));
+            line.setAttribute('y2', String(yS));
             line.setAttribute('stroke', '#444');
             line.setAttribute('stroke-width', '0.2');
             svgEl.appendChild(line);
 
+            const lineMirror = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+            lineMirror.setAttribute('x1', '0');
+            lineMirror.setAttribute('y1', '0');
+            lineMirror.setAttribute('x2', String(xP));
+            lineMirror.setAttribute('y2', String(yP));
+            lineMirror.setAttribute('stroke', '#444');
+            lineMirror.setAttribute('stroke-width', '0.2');
+            svgEl.appendChild(lineMirror);
+
             const lbl = document.createElementNS('http://www.w3.org/2000/svg', 'text');
-            lbl.setAttribute('x', String(x * 1.05));
-            lbl.setAttribute('y', String(y * 1.05));
+            lbl.setAttribute('x', String(xS * 1.05));
+            lbl.setAttribute('y', String(yS * 1.05));
             lbl.setAttribute('font-size', '5');
             lbl.setAttribute('fill', '#aaa');
             lbl.setAttribute('text-anchor', 'middle');
             lbl.textContent = `${twa}°`;
             svgEl.appendChild(lbl);
+
+            if (twa !== 0 && twa !== 180) {
+                const lblMirror = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                lblMirror.setAttribute('x', String(xP * 1.05));
+                lblMirror.setAttribute('y', String(yP * 1.05));
+                lblMirror.setAttribute('font-size', '5');
+                lblMirror.setAttribute('fill', '#aaa');
+                lblMirror.setAttribute('text-anchor', 'middle');
+                lblMirror.textContent = `${twa}°`;
+                svgEl.appendChild(lblMirror);
+            }
         }
 
         // Draw polar curves for each TWS
@@ -304,24 +341,24 @@
             for (let ti = 0; ti < p.twaValues.length; ti++) {
                 const speed = p.speeds[ti][si];
                 const r = speed * scale;
-                const twaRad = (p.twaValues[ti] - 90) * Math.PI / 180;
-                const x = Math.cos(twaRad) * r;
-                const y = Math.sin(twaRad) * r;
+                const theta = p.twaValues[ti] * Math.PI / 180;
+                const x = Math.sin(theta) * r;
+                const y = -Math.cos(theta) * r;
                 points.push(`${x},${y}`);
             }
-            // Mirror for port side
-            for (let ti = p.twaValues.length - 2; ti >= 0; ti--) {
+            // Mirror for port side, walking back for a closed smooth shape
+            for (let ti = p.twaValues.length - 1; ti >= 0; ti--) {
                 const speed = p.speeds[ti][si];
                 const r = speed * scale;
-                const twaRad = -(p.twaValues[ti] - 90) * Math.PI / 180;
-                const x = Math.cos(twaRad) * r;
-                const y = Math.sin(twaRad) * r;
+                const theta = p.twaValues[ti] * Math.PI / 180;
+                const x = -Math.sin(theta) * r;
+                const y = -Math.cos(theta) * r;
                 points.push(`${x},${y}`);
             }
 
             const polyline = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
             polyline.setAttribute('points', points.join(' '));
-            polyline.setAttribute('fill', 'none');
+            polyline.setAttribute('fill', 'rgba(255,255,255,0.03)');
             polyline.setAttribute('stroke', colors[si % colors.length]);
             polyline.setAttribute('stroke-width', '1');
             polyline.setAttribute('opacity', '0.8');
