@@ -8,6 +8,7 @@ import {
     normalizeAngle,
 } from './geo';
 import { isPointOnLand, isLegOverLand } from './windgrid';
+import { isPointInNoGoZone, isLegCrossingNoGoZone } from './nogozones';
 import type { MotorConfig } from '../types/polar';
 import type {
     Waypoint,
@@ -18,6 +19,7 @@ import type {
     RouteMetrics,
     LegMetrics,
     RoutingProgress,
+    NoGoZone,
 } from '../types/routing';
 import type { WindGrid, ElevationGrid } from './windgrid';
 
@@ -38,6 +40,7 @@ export function computeRoute(
     windGrid: WindGrid,
     onProgress?: (progress: RoutingProgress) => void,
     elevationGrid?: ElevationGrid,
+    noGoZones?: NoGoZone[],
 ): RouteResult {
     if (waypoints.length < 2) {
         throw new Error('Need at least 2 waypoints');
@@ -157,6 +160,16 @@ export function computeRoute(
                     }
                 }
 
+                // No-go zone avoidance: skip if point is inside or leg crosses a zone
+                if (noGoZones && noGoZones.length > 0) {
+                    if (isPointInNoGoZone(newLat, newLon, noGoZones)) {
+                        continue;
+                    }
+                    if (isLegCrossingNoGoZone(parent.lat, parent.lon, newLat, newLon, noGoZones)) {
+                        continue;
+                    }
+                }
+
                 const newPoint: IsochronePoint = {
                     lat: newLat,
                     lon: newLon,
@@ -266,9 +279,10 @@ export function computeRouteWithDepartureOptimization(
     windGrid: WindGrid,
     onProgress?: (progress: RoutingProgress) => void,
     elevationGrid?: ElevationGrid,
+    noGoZones?: NoGoZone[],
 ): RouteResult {
     if (!config.optimizeDeparture) {
-        return computeRoute(waypoints, config, windGrid, onProgress, elevationGrid);
+        return computeRoute(waypoints, config, windGrid, onProgress, elevationGrid, noGoZones);
     }
 
     const windowMs = config.departureWindowHours * 3600 * 1000;
@@ -295,7 +309,7 @@ export function computeRouteWithDepartureOptimization(
         });
 
         try {
-            const result = computeRoute(waypoints, trialConfig, windGrid, undefined, elevationGrid);
+            const result = computeRoute(waypoints, trialConfig, windGrid, undefined, elevationGrid, noGoZones);
 
             if (deadlineMode) {
                 // In deadline mode, successful routes already satisfy the deadline.
@@ -326,6 +340,7 @@ export function computeRouteWithDepartureOptimization(
             windGrid,
             onProgress,
             elevationGrid,
+            noGoZones,
         );
     }
 

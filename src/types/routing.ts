@@ -142,3 +142,13 @@ export interface RoutingProgress {
     /** Message for display */
     message: string;
 }
+
+/** A user-defined polygonal no-go zone */
+export interface NoGoZone {
+    /** Unique identifier */
+    id: string;
+    /** Display name */
+    name: string;
+    /** Polygon vertices (lat/lon). First and last vertex are implicitly connected. */
+    vertices: { lat: number; lon: number }[];
+}

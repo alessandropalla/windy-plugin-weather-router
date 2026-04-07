@@ -33,6 +33,43 @@
 
         <hr class="mt-15 mb-15" />
 
+        <!-- No-Go Zones -->
+        <h4 class="size-s mb-5">🚫 No-Go Zones</h4>
+        {#if drawingNoGoZone}
+            <p class="size-xs fg-grey mb-5">
+                Click on the map to add vertices ({currentNoGoVertices.length} placed).
+                Need at least 3 points.
+            </p>
+            <div class="nogo-btn-row mb-10">
+                <button class="button button--variant-green size-xs" disabled={currentNoGoVertices.length < 3} on:click={finishNoGoZone}>
+                    ✓ Finish Zone
+                </button>
+                <button class="button size-xs" on:click={cancelNoGoZone}>
+                    ✕ Cancel
+                </button>
+            </div>
+        {:else}
+            <button class="button size-xs mb-5" on:click={startDrawingNoGoZone}>
+                + Draw No-Go Zone
+            </button>
+        {/if}
+
+        {#if noGoZones.length > 0}
+            <div class="nogo-list mb-10">
+                {#each noGoZones as zone}
+                    <div class="nogo-item">
+                        <span class="size-xs nogo-name">🚫 {zone.name} ({zone.vertices.length} pts)</span>
+                        <button class="nogo-remove" on:click={() => removeNoGoZone(zone.id)} title="Remove zone">✕</button>
+                    </div>
+                {/each}
+                <button class="button size-xs mt-5" on:click={clearAllNoGoZones}>
+                    Clear All Zones
+                </button>
+            </div>
+        {/if}
+
+        <hr class="mt-15 mb-15" />
+
         <!-- Compute button -->
         <button
             class="button button--variant-orange"
@@ -100,7 +137,7 @@
 
     import type { PolarDiagram } from './types/polar';
     import { DEFAULT_MOTOR_CONFIG } from './types/polar';
-    import type { Waypoint, RouteConfig, RouteResult, IsochronePoint } from './types/routing';
+    import type { Waypoint, RouteConfig, RouteResult, IsochronePoint, NoGoZone } from './types/routing';
     import type { WindGrid } from './lib/windgrid';
     import { fetchWindGrid, fetchElevationGrid } from './lib/windgrid';
     import type { ElevationGrid } from './lib/windgrid';
@@ -151,6 +188,14 @@
     let isochroneLines: L.Polyline[] = [];
     let showIsochrones = false;
 
+    // No-Go Zones
+    let noGoZones: NoGoZone[] = [];
+    let drawingNoGoZone = false;
+    let currentNoGoVertices: { lat: number; lon: number }[] = [];
+    let noGoMapPolygons: L.Polygon[] = [];
+    let noGoDrawPolyline: L.Polyline | null = null;
+    const NOGO_STORAGE_KEY = 'windy-router-nogo-zones';
+
     $: canCompute = waypoints.length >= 2 && currentPolar !== null;
 
     // --- Reactive: redraw map layers when waypoints change ---
@@ -189,6 +234,11 @@
 
     // --- Map click handler ---
     function onMapClick(latLon: LatLon) {
+        if (drawingNoGoZone) {
+            currentNoGoVertices = [...currentNoGoVertices, { lat: latLon.lat, lon: latLon.lon }];
+            drawNoGoPreview();
+            return;
+        }
         if (!waypointAddMode || !waypointPanel) return;
         waypointPanel.addWaypoint(latLon.lat, latLon.lon);
     }
@@ -238,6 +288,96 @@
             wps.map(w => [w.lat, w.lon] as [number, number]),
             { color: '#ffffff', weight: 2, opacity: 0.4, dashArray: '8,6' },
         ).addTo(map);
+    }
+
+    // --- No-Go Zone functions ---
+    function startDrawingNoGoZone() {
+        drawingNoGoZone = true;
+        waypointAddMode = false;
+        currentNoGoVertices = [];
+    }
+
+    function finishNoGoZone() {
+        if (currentNoGoVertices.length < 3) {
+            drawingNoGoZone = false;
+            currentNoGoVertices = [];
+            removeNoGoPreview();
+            return;
+        }
+        const zone: NoGoZone = {
+            id: `nogo-${Date.now()}`,
+            name: `Zone ${noGoZones.length + 1}`,
+            vertices: [...currentNoGoVertices],
+        };
+        noGoZones = [...noGoZones, zone];
+        drawingNoGoZone = false;
+        currentNoGoVertices = [];
+        removeNoGoPreview();
+        drawNoGoZonesOnMap();
+        saveNoGoZones();
+    }
+
+    function cancelNoGoZone() {
+        drawingNoGoZone = false;
+        currentNoGoVertices = [];
+        removeNoGoPreview();
+    }
+
+    function removeNoGoZone(id: string) {
+        noGoZones = noGoZones.filter(z => z.id !== id);
+        drawNoGoZonesOnMap();
+        saveNoGoZones();
+    }
+
+    function clearAllNoGoZones() {
+        noGoZones = [];
+        drawNoGoZonesOnMap();
+        saveNoGoZones();
+    }
+
+    function drawNoGoPreview() {
+        removeNoGoPreview();
+        if (currentNoGoVertices.length < 2) return;
+        noGoDrawPolyline = new L.Polyline(
+            currentNoGoVertices.map(v => [v.lat, v.lon] as [number, number]),
+            { color: '#f44336', weight: 2, opacity: 0.7, dashArray: '6,4' },
+        ).addTo(map);
+    }
+
+    function removeNoGoPreview() {
+        if (noGoDrawPolyline) {
+            noGoDrawPolyline.remove();
+            noGoDrawPolyline = null;
+        }
+    }
+
+    function drawNoGoZonesOnMap() {
+        for (const p of noGoMapPolygons) p.remove();
+        noGoMapPolygons = [];
+        for (const zone of noGoZones) {
+            if (zone.vertices.length < 3) continue;
+            const polygon = new L.Polygon(
+                zone.vertices.map(v => [v.lat, v.lon] as [number, number]),
+                { color: '#f44336', fillColor: '#f44336', fillOpacity: 0.2, weight: 2 },
+            ).addTo(map);
+            polygon.bindTooltip(zone.name, { permanent: false });
+            noGoMapPolygons.push(polygon);
+        }
+    }
+
+    function saveNoGoZones() {
+        localStorage.setItem(NOGO_STORAGE_KEY, JSON.stringify(noGoZones));
+    }
+
+    function loadNoGoZones() {
+        try {
+            const raw = localStorage.getItem(NOGO_STORAGE_KEY);
+            if (!raw) return;
+            noGoZones = JSON.parse(raw) as NoGoZone[];
+            drawNoGoZonesOnMap();
+        } catch {
+            // Ignore
+        }
     }
 
     // --- Routing ---
@@ -316,10 +456,10 @@
                         const r = routeConfig.optimizeDeparture
                             ? computeRouteWithDepartureOptimization(waypoints, routeConfig, windGrid, p => {
                                   progressMsg = p.message;
-                              }, elevationGrid)
+                              }, elevationGrid, noGoZones)
                             : computeRoute(waypoints, routeConfig, windGrid, p => {
                                   progressMsg = p.message;
-                              }, elevationGrid);
+                              }, elevationGrid, noGoZones);
                         resolve(r);
                     } catch (e) {
                         reject(e);
@@ -535,11 +675,15 @@
             routePolyline = null;
         }
         clearRouteDisplay();
+        for (const p of noGoMapPolygons) p.remove();
+        noGoMapPolygons = [];
+        removeNoGoPreview();
     }
 
     // --- Lifecycle ---
     export const onopen = (params?: LatLon) => {
         loadSavedSettings();
+        loadNoGoZones();
 
         // Load saved waypoints
         const saved = loadWaypoints();
@@ -600,6 +744,37 @@
     hr {
         border: none;
         border-top: 1px solid #444;
+    }
+    .nogo-btn-row {
+        display: flex;
+        gap: 6px;
+    }
+    .nogo-list {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+    .nogo-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 3px 6px;
+        background: rgba(244, 67, 54, 0.1);
+        border-radius: 4px;
+    }
+    .nogo-name {
+        color: #f44336;
+    }
+    .nogo-remove {
+        background: none;
+        border: none;
+        color: #f44336;
+        cursor: pointer;
+        font-size: 14px;
+        padding: 0 4px;
+        &:hover {
+            color: #ff7961;
+        }
     }
 </style>
 
