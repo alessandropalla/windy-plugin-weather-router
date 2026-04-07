@@ -2,7 +2,6 @@ import resolve from '@rollup/plugin-node-resolve';
 import commonjs from '@rollup/plugin-commonjs';
 import terser from '@rollup/plugin-terser';
 
-import serve from 'rollup-plugin-serve';
 import rollupSvelte from 'rollup-plugin-svelte';
 import rollupSwc from 'rollup-plugin-swc3';
 import rollupCleanup from 'rollup-plugin-cleanup';
@@ -52,31 +51,8 @@ const buildConfigurations = {
 const requiredConfig = process.env.CONFIG || 'src';
 const { input, out } = buildConfigurations[requiredConfig];
 
-export default {
-    input,
-    output: [
-        {
-            file: `dist/${out}.js`,
-            format: 'module',
-            sourcemap: true,
-        },
-        {
-            file: `dist/${out}.min.js`,
-            format: 'module',
-            plugins: [rollupCleanup({ comments: 'none', extensions: ['ts'] }), terser()],
-        },
-    ],
-
-    onwarn: () => {
-        /* We disable all warning messages */
-    },
-    external: id => id.startsWith('@windy/'),
-    watch: {
-        include: ['src/**', 'examples/**'],
-        exclude: 'node_modules/**',
-        clearScreen: false,
-    },
-    plugins: [
+export default async () => {
+    const plugins = [
         rollupSvelte({
             emitCss: false,
             preprocess: {
@@ -102,7 +78,11 @@ export default {
         }),
         commonjs(),
         transformCodeToESMPlugin(),
-        process.env.SERVE !== 'false' &&
+    ];
+
+    if (process.env.SERVE !== 'false') {
+        const { default: serve } = await import('rollup-plugin-serve');
+        plugins.push(
             serve({
                 contentBase: 'dist',
                 host: '0.0.0.0',
@@ -115,5 +95,33 @@ export default {
                     cert: certificatePEM,
                 },
             }),
-    ],
+        );
+    }
+
+    return {
+        input,
+        output: [
+            {
+                file: `dist/${out}.js`,
+                format: 'module',
+                sourcemap: true,
+            },
+            {
+                file: `dist/${out}.min.js`,
+                format: 'module',
+                plugins: [rollupCleanup({ comments: 'none', extensions: ['ts'] }), terser()],
+            },
+        ],
+
+        onwarn: () => {
+            /* We disable all warning messages */
+        },
+        external: id => id.startsWith('@windy/'),
+        watch: {
+            include: ['src/**', 'examples/**'],
+            exclude: 'node_modules/**',
+            clearScreen: false,
+        },
+        plugins,
+    };
 };
