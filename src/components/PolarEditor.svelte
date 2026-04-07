@@ -1,12 +1,19 @@
 <div class="polar-editor">
     <div class="polar-tabs mb-10">
+        <span class="tab clickable" class:tab--active={activeTab === 'wizard'} on:click={() => activeTab = 'wizard'}>✨ Wizard</span>
         <span class="tab clickable" class:tab--active={activeTab === 'manage'} on:click={() => activeTab = 'manage'}>Manage</span>
         <span class="tab clickable" class:tab--active={activeTab === 'import'} on:click={() => activeTab = 'import'}>Import</span>
         <span class="tab clickable" class:tab--active={activeTab === 'edit'} on:click={() => activeTab = 'edit'}>Edit</span>
         <span class="tab clickable" class:tab--active={activeTab === 'plot'} on:click={() => activeTab = 'plot'}>Plot</span>
     </div>
 
-    {#if activeTab === 'manage'}
+    {#if activeTab === 'wizard'}
+        <BoatWizard
+            onComplete={handleWizardComplete}
+            onCancel={() => activeTab = 'manage'}
+        />
+
+    {:else if activeTab === 'manage'}
         <div class="mb-10">
             <label class="size-s">Select Polar:</label>
             <select class="form-control mt-5" bind:value={selectedPolarName} on:change={onSelectPolar}>
@@ -101,7 +108,7 @@
 <script lang="ts">
     import { onMount } from 'svelte';
     import { createEventDispatcher } from 'svelte';
-    import type { PolarDiagram } from '../types/polar';
+    import type { PolarDiagram, BoatConfig } from '../types/polar';
     import {
         parsePolarCSV,
         createEmptyPolar,
@@ -111,12 +118,13 @@
         deletePolar,
         polarToCSV,
     } from '../lib/polar';
+    import BoatWizard from './BoatWizard.svelte';
 
     const dispatch = createEventDispatcher<{ change: PolarDiagram | null }>();
 
     export let polar: PolarDiagram | null = null;
 
-    let activeTab: 'manage' | 'import' | 'edit' | 'plot' = 'manage';
+    let activeTab: 'wizard' | 'manage' | 'import' | 'edit' | 'plot' = 'manage';
     let selectedPolarName = '';
     let polarNames: string[] = [];
     let importName = '';
@@ -124,8 +132,16 @@
     let importError = '';
     let svgEl: SVGSVGElement;
 
+    const SELECTED_POLAR_KEY = 'windy-router-selected-polar';
+
     onMount(() => {
         refreshPolarList();
+        // Restore previously selected polar
+        const savedPolarName = localStorage.getItem(SELECTED_POLAR_KEY);
+        if (savedPolarName) {
+            selectedPolarName = savedPolarName;
+            onSelectPolar();
+        }
     });
 
     function refreshPolarList() {
@@ -140,7 +156,22 @@
             const all = loadAllPolars();
             polar = all[selectedPolarName] ?? null;
         }
+        // Save selection to localStorage
+        if (selectedPolarName) {
+            localStorage.setItem(SELECTED_POLAR_KEY, selectedPolarName);
+        } else {
+            localStorage.removeItem(SELECTED_POLAR_KEY);
+        }
         dispatch('change', polar);
+    }
+
+    function handleWizardComplete(boatConfig: BoatConfig) {
+        // Save the polar from the wizard
+        savePolar(boatConfig.polar);
+        selectedPolarName = boatConfig.polar.name;
+        refreshPolarList();
+        onSelectPolar();
+        activeTab = 'manage';
     }
 
     function createNew() {
@@ -149,7 +180,7 @@
         savePolar(polar);
         selectedPolarName = name;
         refreshPolarList();
-        dispatch('change', polar);
+        onSelectPolar();
     }
 
     function loadExample() {
@@ -157,7 +188,7 @@
         savePolar(polar);
         selectedPolarName = polar.name;
         refreshPolarList();
-        dispatch('change', polar);
+        onSelectPolar();
     }
 
     function deleteSelected() {
@@ -165,6 +196,7 @@
             deletePolar(selectedPolarName);
             polar = null;
             selectedPolarName = '';
+            localStorage.removeItem(SELECTED_POLAR_KEY);
             refreshPolarList();
             dispatch('change', null);
         }
@@ -180,7 +212,7 @@
         savePolar(polar);
         selectedPolarName = nextName;
         refreshPolarList();
-        dispatch('change', polar);
+        onSelectPolar();
     }
 
     function exportCSV() {
