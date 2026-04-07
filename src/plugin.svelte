@@ -520,16 +520,19 @@
                 for (const altMode of altModes) {
                     progressMsg = `Computing alternative (${altMode})...`;
                     try {
-                        // Alternatives should isolate objective differences only.
-                        // Keep the same selected departure, disable departure optimization and keep all constraints.
+                        // Alternatives isolate objective differences.
+                        // When departure optimization is enabled, each objective gets its own best departure.
+                        // Otherwise all routes use the same departure timestamp.
                         const altConfig: RouteConfig = {
                             ...routeConfig,
-                            departureTime: result.departureTime,
-                            optimizeDeparture: false,
                             mode: altMode,
                             arrivalDeadline: undefined,
                             routeAlternatives: false,
                         };
+                        if (!routeConfig.optimizeDeparture) {
+                            altConfig.departureTime = result.departureTime;
+                            altConfig.optimizeDeparture = false;
+                        }
                         const altResult = await runRoutingTask(altConfig, windGrid, elevationGrid);
                         alternativeResults = [
                             ...alternativeResults,

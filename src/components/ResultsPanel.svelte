@@ -187,7 +187,7 @@
         <div class="mb-15">
             <div class="size-s mb-5">Route Comparison</div>
             <div class="size-xs fg-grey mb-5">
-                Primary route is highlighted first. Alternatives help compare speed, comfort, and fuel tradeoffs.
+                Primary route is highlighted first. Alternatives compare objective tradeoffs and, when enabled, each objective's best departure time.
             </div>
             <div class="comparison-table-wrap">
                 <table class="comparison-table size-xs">
@@ -195,6 +195,8 @@
                         <tr>
                             <th>Route</th>
                             <th>Objective</th>
+                            <th>Departure</th>
+                            <th>Arrival</th>
                             <th>Duration</th>
                             <th>Distance</th>
                             <th>Avg kt</th>
@@ -211,6 +213,8 @@
                             <tr class:primary-row={row.primary}>
                                 <td>{row.routeLabel}</td>
                                 <td>{row.objectiveLabel}</td>
+                                <td>{formatTime(row.departureTime)}</td>
+                                <td>{formatTime(row.arrivalTime)}</td>
                                 <td>{formatDuration(row.totalTimeHours)}</td>
                                 <td>{row.totalDistanceNm.toFixed(1)} nm</td>
                                 <td>{row.avgSpeedKt.toFixed(1)}</td>
@@ -322,6 +326,8 @@
         primary: boolean;
         alternativeIndex: number | null;
         objectiveLabel: string;
+        departureTime: number;
+        arrivalTime: number;
         totalDistanceNm: number;
         totalTimeHours: number;
         avgSpeedKt: number;
@@ -408,6 +414,8 @@
             primary,
             alternativeIndex,
             objectiveLabel: route.optimizationLabel,
+            departureTime: route.departureTime,
+            arrivalTime: route.metrics.arrivalTime,
             totalDistanceNm: route.metrics.totalDistanceNm,
             totalTimeHours: route.metrics.totalTimeHours,
             avgSpeedKt: route.metrics.avgSpeedKt,
