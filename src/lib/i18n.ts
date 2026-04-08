@@ -313,8 +313,8 @@ const it: Record<string, string> = {
 
     // Info tab
     'info.title': 'Avviso importante',
-    'info.educational': 'Questo plugin e fornito esclusivamente per scopi educativi e informativi.',
-    'info.liability': 'Utilizzando questo plugin, riconosci di essere l\'unico responsabile di tutte le decisioni e azioni basate sui risultati forniti. Gli autori e i contributori declinano ogni responsabilita per perdite, danni, lesioni o conseguenze derivanti dal suo utilizzo.',
+    'info.educational': 'Questo plugin è fornito esclusivamente per scopi educativi e informativi.',
+    'info.liability': 'Utilizzando questo plugin, riconosci di essere l\'unico responsabile di tutte le decisioni e azioni basate sui risultati forniti. Gli autori e i contributori declinano ogni responsabilità per perdite, danni, lesioni o conseguenze derivanti dal suo utilizzo.',
     'info.verify': 'Verifica sempre in modo indipendente rotte, meteo, pericoli, normative e dettagli di navigazione usando carte nautiche ufficiali e aggiornate e strumenti adeguati.',
 
     // Route tab — hints & no-go zones
