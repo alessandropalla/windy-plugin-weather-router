@@ -3,12 +3,19 @@
     // Route overlays should survive plugin panel close/reopen.
     let persistedRouteLayers: L.Layer[] = [];
 
+    function safeRemoveLayer(layer: L.Layer | null | undefined) {
+        if (!layer) return;
+        if ((layer as any)._map) {
+            layer.remove();
+        }
+    }
+
     function rememberRouteLayer(layer: L.Layer) {
         persistedRouteLayers.push(layer);
     }
 
     function clearPersistedRouteLayers() {
-        for (const layer of persistedRouteLayers) layer.remove();
+        for (const layer of persistedRouteLayers) safeRemoveLayer(layer);
         persistedRouteLayers = [];
     }
 </script>
@@ -163,7 +170,7 @@
     import { saveWaypoints, loadWaypoints } from './lib/waypoints';
 
     import type { LatLon } from '@windy/interfaces';
-    import { t, tGet, initLocale, formatShortDate } from './lib/i18n';
+    import { t, tGet, initLocale } from './lib/i18n';
 
     const { title, name } = config;
     const SETTINGS_STORAGE_KEY = 'windy-router-settings';
@@ -656,7 +663,7 @@
 
     // --- Alternative routes ---
     function clearAlternativeRoutes() {
-        for (const group of alternativePolylines) for (const l of group) l.remove();
+        for (const group of alternativePolylines) for (const l of group) safeRemoveLayer(l);
         alternativePolylines = [];
     }
 
@@ -752,7 +759,7 @@
             animTimer = null;
         }
         if (animMarker) {
-            animMarker.remove();
+            safeRemoveLayer(animMarker);
             animMarker = null;
         }
         animPlaying = false;
@@ -766,10 +773,10 @@
     function clearRouteDisplay() {
         clearPersistedRouteLayers();
         if (optimalRoutePolyline) {
-            optimalRoutePolyline.remove();
+            safeRemoveLayer(optimalRoutePolyline);
             optimalRoutePolyline = null;
         }
-        for (const l of isochroneLines) l.remove();
+        for (const l of isochroneLines) safeRemoveLayer(l);
         isochroneLines = [];
         clearAlternativeRoutes();
         stopAnimation();
