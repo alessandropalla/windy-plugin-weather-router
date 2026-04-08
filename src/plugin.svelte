@@ -240,7 +240,7 @@
     import { loadAllPolars } from './lib/polar';
 
     import type { LatLon } from '@windy/interfaces';
-    import { t, tGet, initLocale } from './lib/i18n';
+    import { t, tGet, initLocale, formatShortDate } from './lib/i18n';
 
     const { title, name } = config;
     const SETTINGS_STORAGE_KEY = 'windy-router-settings';
@@ -797,9 +797,9 @@
             ).addTo(map);
 
             segment.bindPopup(
-                `<b>${new Date(curr.time).toUTCString()}</b><br/>` +
+                `<b>${formatRoutePointTime(curr.time)}</b><br/>` +
                 `${tGet('popup.speed')}: ${curr.boatSpeed.toFixed(1)} kt<br/>` +
-                `${tGet('popup.wind')}: ${curr.tws.toFixed(0)} kt @ ${curr.twd.toFixed(0)}°<br/>` +
+                `${tGet('popup.wind')}: ${curr.tws.toFixed(0)} kt (${tGet('popup.gust')} ${curr.gust.toFixed(0)} kt) @ ${curr.twd.toFixed(0)}°<br/>` +
                 `${tGet('popup.waves')}: ${curr.waveHeight.toFixed(1)} m @ ${curr.waveDir.toFixed(0)}° (${curr.wavePeriod.toFixed(1)} s)<br/>` +
                 `${tGet('popup.twa')}: ${curr.twa.toFixed(0)}°<br/>` +
                 `${curr.isMotoring ? tGet('popup.motoring') : tGet('popup.sailing')}`,
@@ -1063,7 +1063,7 @@
                 zIndexOffset: 1000,
             },
         ).addTo(map);
-        animMarker.bindTooltip(formatAnimTime(path[0].time), { permanent: true, direction: 'top' });
+        animMarker.bindTooltip(formatAnimTooltip(path[0]), { permanent: true, direction: 'top' });
         store.set('timestamp', path[0].time);
 
         const intervalMs = Math.max(10, Math.round(10000 / speed));
@@ -1074,7 +1074,7 @@
                 return;
             }
             animMarker?.setLatLng([path[idx].lat, path[idx].lon]);
-            animMarker?.getTooltip()?.setContent(formatAnimTime(path[idx].time));
+            animMarker?.getTooltip()?.setContent(formatAnimTooltip(path[idx]));
             store.set('timestamp', path[idx].time);
         }, intervalMs);
     }
@@ -1092,8 +1092,17 @@
     }
 
     function formatAnimTime(ts: number): string {
-        const d = new Date(ts);
-        return `${d.getUTCMonth() + 1}/${d.getUTCDate()} ${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}Z`;
+        return formatShortDate(ts, Boolean(settingsCache.useLocalTime));
+    }
+
+    function formatRoutePointTime(ts: number): string {
+        return formatShortDate(ts, Boolean(settingsCache.useLocalTime));
+    }
+
+    function formatAnimTooltip(point: IsochronePoint): string {
+        return `<b>${formatAnimTime(point.time)}</b><br/>` +
+            `${tGet('popup.wind')}: ${point.tws.toFixed(0)} kt (${tGet('popup.gust')} ${point.gust.toFixed(0)} kt)<br/>` +
+            `${tGet('popup.waves')}: ${point.waveHeight.toFixed(1)} m`;
     }
 
     function clearRouteDisplay() {
@@ -1306,6 +1315,7 @@
             'lon',
             'boat_speed_kt',
             'wind_speed_kt',
+            'wind_gust_kt',
             'wind_dir_deg',
             'wave_height_m',
             'wave_dir_deg',
@@ -1321,6 +1331,7 @@
             p.lon.toFixed(6),
             p.boatSpeed.toFixed(2),
             p.tws.toFixed(2),
+            p.gust.toFixed(2),
             p.twd.toFixed(1),
             p.waveHeight.toFixed(2),
             p.waveDir.toFixed(1),
@@ -1337,7 +1348,7 @@
     <rtept lat="${p.lat.toFixed(6)}" lon="${p.lon.toFixed(6)}">
       <name>WP ${i + 1}</name>
       <time>${new Date(p.time).toISOString()}</time>
-            <desc>Boat ${p.boatSpeed.toFixed(1)}kt, Wind ${p.tws.toFixed(1)}kt @ ${p.twd.toFixed(0)}deg, Waves ${p.waveHeight.toFixed(1)}m @ ${p.waveDir.toFixed(0)}deg (${p.wavePeriod.toFixed(1)}s), ${p.isMotoring ? 'Motoring' : 'Sailing'}</desc>
+                        <desc>Boat ${p.boatSpeed.toFixed(1)}kt, Wind ${p.tws.toFixed(1)}kt (Gust ${p.gust.toFixed(1)}kt) @ ${p.twd.toFixed(0)}deg, Waves ${p.waveHeight.toFixed(1)}m @ ${p.waveDir.toFixed(0)}deg (${p.wavePeriod.toFixed(1)}s), ${p.isMotoring ? 'Motoring' : 'Sailing'}</desc>
     </rtept>`).join('');
 
         return `<?xml version="1.0" encoding="UTF-8"?>

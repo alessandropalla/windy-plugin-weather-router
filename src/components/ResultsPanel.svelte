@@ -95,6 +95,8 @@
             <div class="size-xs fg-grey mb-5">{$t('results.xAxisLabel', { tz: useLocalTime ? $t('settings.local') : $t('settings.utc') })}</div>
             <div class="chart-label size-xs fg-grey">{$t('results.windSpeed')}</div>
             <svg bind:this={windChartEl} class="timeline-chart"></svg>
+            <div class="chart-label size-xs fg-grey mt-10">{$t('results.windGust')}</div>
+            <svg bind:this={gustChartEl} class="timeline-chart"></svg>
             <div class="chart-label size-xs fg-grey mt-10">{$t('results.boatSpeed')}</div>
             <svg bind:this={speedChartEl} class="timeline-chart"></svg>
             <div class="chart-label size-xs fg-grey mt-10">{$t('results.twa')}</div>
@@ -113,6 +115,7 @@
                             <th>#</th>
                             <th>{$t('results.timeCol', { tz: useLocalTime ? $t('settings.local') : $t('settings.utc') })}</th>
                             <th>{$t('results.windKt')}</th>
+                            <th>{$t('results.gustKt')}</th>
                             <th>{$t('results.boatKt')}</th>
                             <th>{$t('results.twaDeg')}</th>
                             <th>{$t('results.wavesM')}</th>
@@ -125,6 +128,7 @@
                                 <td>{row.index}</td>
                                 <td>{row.timeLabel}</td>
                                 <td>{row.windKt}</td>
+                                <td>{row.gustKt}</td>
                                 <td>{row.boatspeedKt}</td>
                                 <td>{row.twaDeg}</td>
                                 <td>{row.waveM}</td>
@@ -341,6 +345,7 @@
     export let animating = false;
 
     let windChartEl: SVGSVGElement;
+    let gustChartEl: SVGSVGElement;
     let speedChartEl: SVGSVGElement;
     let twaChartEl: SVGSVGElement;
     let wavesChartEl: SVGSVGElement;
@@ -354,6 +359,7 @@
         index: number;
         timeLabel: string;
         windKt: string;
+        gustKt: string;
         boatspeedKt: string;
         twaDeg: string;
         waveM: string;
@@ -405,6 +411,7 @@
             index: idx,
             timeLabel: formatTime(p.time),
             windKt: p.tws.toFixed(1),
+            gustKt: p.gust.toFixed(1),
             boatspeedKt: p.boatSpeed.toFixed(1),
             twaDeg: p.twa.toFixed(0),
             waveM: p.waveHeight.toFixed(2),
@@ -417,6 +424,7 @@
     afterUpdate(() => {
         if (timelinePath.length > 1) {
             drawTimelineChart(windChartEl, timelinePath, p => p.tws, '#4dc9f6', 'kt');
+            drawTimelineChart(gustChartEl, timelinePath, p => p.gust, '#ff5f6d', 'kt');
             drawTimelineChart(speedChartEl, timelinePath, p => p.boatSpeed, '#f67019', 'kt');
             drawTimelineChart(twaChartEl, timelinePath, p => p.twa, '#acc236', '°');
             drawTimelineChart(wavesChartEl, timelinePath, p => p.waveHeight, '#00bcd4', 'm');
@@ -431,6 +439,7 @@
         const first = path[0];
         const hasArtificialSeedValues =
             first.tws === 0 &&
+            first.gust === 0 &&
             first.boatSpeed === 0 &&
             first.twa === 0 &&
             first.waveHeight === 0;
@@ -440,7 +449,7 @@
         }
 
         const firstMeasuredIndex = path.findIndex(
-            p => p.tws > 0 || p.boatSpeed > 0 || p.twa > 0 || p.waveHeight > 0,
+            p => p.tws > 0 || p.gust > 0 || p.boatSpeed > 0 || p.twa > 0 || p.waveHeight > 0,
         );
 
         if (firstMeasuredIndex <= 0) {
@@ -451,6 +460,7 @@
         const normalizedFirst: IsochronePoint = {
             ...first,
             tws: measured.tws,
+            gust: measured.gust,
             boatSpeed: measured.boatSpeed,
             twa: measured.twa,
             waveHeight: measured.waveHeight,

@@ -68,6 +68,8 @@ export interface IsochronePoint {
     boatSpeed: number;
     /** True wind speed at this point (knots) */
     tws: number;
+    /** Gust speed at this point (knots) */
+    gust: number;
     /** True wind direction at this point (degrees) */
     twd: number;
     /** True wind angle at this point (degrees, 0-180) */
