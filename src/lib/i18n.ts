@@ -497,9 +497,9 @@ const it: Record<string, string> = {
     'polar.errorParse': 'Errore di analisi: {msg}',
 
     // BoatWizard
-    'wizard.title': 'Procedura guidata barca',
+    'wizard.title': 'Procedura guidata configurazione barca',
     'wizard.step': 'Passo {n} di 3',
-    'wizard.selectClass': 'Seleziona tipo barca',
+    'wizard.selectClass': 'Seleziona il tipo barca',
     'wizard.selectClassHint': 'Scegli il tipo di barca più simile alla tua:',
     'wizard.details': 'Personalizza dettagli barca',
     'wizard.summary': 'Riepilogo',
@@ -531,7 +531,7 @@ const it: Record<string, string> = {
     // Boat classes
     'boatClass.dinghy.label': 'Deriva leggera',
     'boatClass.dinghy.desc': 'Navigazione veloce, leggera e reattiva',
-    'boatClass.dayboat.label': 'Barca diurna',
+    'boatClass.dayboat.label': 'Barca da diporto',
     'boatClass.dayboat.desc': 'Ottime prestazioni generali',
     'boatClass.cruiser.label': 'Cruiser',
     'boatClass.cruiser.desc': 'Prestazioni confortevoli e costanti',
