@@ -12,9 +12,20 @@ const en: Record<string, string> = {
     'tab.polars': '📊 Polars',
     'tab.settings': '⚙ Settings',
     'tab.results': '📈 Results',
+    'tab.info': 'ℹ Info',
+
+    // Info tab
+    'info.title': 'Important Notice',
+    'info.educational': 'This plugin is provided for educational and informational purposes only.',
+    'info.liability': 'By using this plugin, you acknowledge that you are solely responsible for all decisions and actions taken based on its output. The authors and contributors disclaim all liability for any loss, damage, injury, or consequences arising from its use.',
+    'info.verify': 'Always independently verify routes, weather, hazards, regulations, and navigation details using official and up-to-date nautical charts and instruments.',
 
     // Route tab — hints & no-go zones
     'route.hint': 'Click "+ Add Waypoint", then left-click on the map to place points.',
+    'route.basic': 'Basic Route Setup',
+    'route.selectPolar': 'Polar diagram:',
+    'route.polarHint': 'Manage or create polars in the Polars tab.',
+    'route.safetyWarning': 'Safety warning: Always verify the computed route. Routes may cross land or unsafe areas. Double-check with nautical charts before navigation.',
     'nogo.title': '🚫 No-Go Zones',
     'nogo.drawing': 'Click on the map to add vertices ({count} placed). Need at least 3 points.',
     'nogo.finish': '✓ Finish Zone',
@@ -27,7 +38,7 @@ const en: Record<string, string> = {
     'btn.compute': 'Compute Weather Route',
     'btn.computing': 'Computing…',
     'compute.noWaypoints': 'Add at least 2 waypoints to compute a route.',
-    'compute.noPolar': 'Select a polar diagram in the Polars tab.',
+    'compute.noPolar': 'Select a polar diagram in the Route tab (or manage one in Polars).',
 
     // Progress / error messages
     'progress.fetchingWind': 'Fetching wind data…',
@@ -285,9 +296,20 @@ const it: Record<string, string> = {
     'tab.polars': '📊 Polare',
     'tab.settings': '⚙ Impostazioni',
     'tab.results': '📈 Risultati',
+    'tab.info': 'ℹ Info',
+
+    // Info tab
+    'info.title': 'Avviso importante',
+    'info.educational': 'Questo plugin e fornito esclusivamente per scopi educativi e informativi.',
+    'info.liability': 'Utilizzando questo plugin, riconosci di essere l\'unico responsabile di tutte le decisioni e azioni basate sui risultati forniti. Gli autori e i contributori declinano ogni responsabilita per perdite, danni, lesioni o conseguenze derivanti dal suo utilizzo.',
+    'info.verify': 'Verifica sempre in modo indipendente rotte, meteo, pericoli, normative e dettagli di navigazione usando carte nautiche ufficiali e aggiornate e strumenti adeguati.',
 
     // Route tab — hints & no-go zones
     'route.hint': 'Clicca "+ Aggiungi punto", poi clicca sulla mappa per posizionare i punti.',
+    'route.basic': 'Impostazioni base rotta',
+    'route.selectPolar': 'Diagramma polare:',
+    'route.polarHint': 'Gestisci o crea polari nella scheda Polare.',
+    'route.safetyWarning': 'Avviso di sicurezza: verifica sempre la rotta calcolata. Le rotte possono attraversare terra o aree non sicure. Controlla sempre con carte nautiche prima di navigare.',
     'nogo.title': '🚫 Zone vietate',
     'nogo.drawing':
         'Clicca sulla mappa per aggiungere vertici ({count} inseriti). Servono almeno 3 punti.',
@@ -301,7 +323,7 @@ const it: Record<string, string> = {
     'btn.compute': 'Calcola rotta meteo',
     'btn.computing': 'Calcolo in corso…',
     'compute.noWaypoints': 'Aggiungi almeno 2 punti per calcolare la rotta.',
-    'compute.noPolar': 'Seleziona un polare nella scheda Polare.',
+    'compute.noPolar': 'Seleziona un polare nella scheda Rotta (o gestiscilo in Polare).',
 
     // Progress / error messages
     'progress.fetchingWind': 'Recupero dati vento…',
@@ -616,7 +638,9 @@ export function tGet(key: string, params?: Record<string, string | number>): str
 
 /** Locale-aware short date/time formatter (MM/DD HH:MM for en; DD/MM HH:MM for it). */
 export function formatShortDate(ts: number, local: boolean): string {
-    if (!ts) return '--';
+    if (!ts) {
+        return '--';
+    }
     const d = new Date(ts);
     const loc = get(locale);
     const pad = (n: number) => String(n).padStart(2, '0');

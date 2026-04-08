@@ -33,10 +33,11 @@
 
     <!-- Tab navigation -->
     <div class="main-tabs mb-10">
-        <span class="main-tab clickable" class:main-tab--active={activeTab === 'route'} on:click={() => activeTab = 'route'}>{$t('tab.route')}</span>
-        <span class="main-tab clickable" class:main-tab--active={activeTab === 'polars'} on:click={() => activeTab = 'polars'}>{$t('tab.polars')}</span>
-        <span class="main-tab clickable" class:main-tab--active={activeTab === 'settings'} on:click={() => activeTab = 'settings'}>{$t('tab.settings')}</span>
-        <span class="main-tab clickable" class:main-tab--active={activeTab === 'results'} on:click={() => activeTab = 'results'}>{$t('tab.results')}</span>
+        <span class="main-tab clickable" class:main-tab--active={activeTab === 'route'} on:click={() => setActiveTab('route')}>{$t('tab.route')}</span>
+        <span class="main-tab clickable" class:main-tab--active={activeTab === 'results'} on:click={() => setActiveTab('results')}>{$t('tab.results')}</span>
+        <span class="main-tab clickable" class:main-tab--active={activeTab === 'polars'} on:click={() => setActiveTab('polars')}>{$t('tab.polars')}</span>
+        <span class="main-tab clickable" class:main-tab--active={activeTab === 'settings'} on:click={() => setActiveTab('settings')}>{$t('tab.settings')}</span>
+        <span class="main-tab clickable" class:main-tab--active={activeTab === 'info'} on:click={() => setActiveTab('info')}>{$t('tab.info')}</span>
     </div>
 
     <!-- Tab content -->
@@ -44,6 +45,48 @@
         <p class="size-xs fg-grey mb-10">
             {$t('route.hint')}
         </p>
+
+        <h4 class="size-s mb-5">{$t('route.basic')}</h4>
+        <div class="form-row mb-5">
+            <label class="size-xs">{$t('route.selectPolar')}</label>
+            <select class="form-control-sm" value={routeSelectedPolarName} on:change={onRoutePolarChange}>
+                <option value="">{$t('polar.none')}</option>
+                {#each routePolarNames as polarName}
+                    <option value={polarName}>{polarName}</option>
+                {/each}
+            </select>
+            <span class="size-xs fg-grey">{$t('route.polarHint')}</span>
+        </div>
+
+        <div class="form-row mb-5">
+            <label class="size-xs">{$t('settings.dateTime', { tz: settingsCache.useLocalTime ? $t('settings.local') : $t('settings.utc') })}</label>
+            <input class="form-control mt-3" type="datetime-local" value={routeDepartureDateStr} on:change={onRouteDepartureChange} />
+        </div>
+        <div class="form-row mb-5">
+            <label class="size-xs">
+                <input type="checkbox" checked={Boolean(settingsCache.useLocalTime)} on:change={onRouteUseLocalTimeChange} />
+                {$t('settings.useLocalTime')}
+            </label>
+        </div>
+        <div class="form-row mb-5">
+            <label class="size-xs">
+                <input type="checkbox" checked={Boolean(settingsCache.optimizeDeparture)} on:change={onRouteOptimizeDepartureChange} />
+                {$t('settings.optimizeDeparture')}
+            </label>
+        </div>
+        {#if settingsCache.optimizeDeparture}
+            <div class="form-row mb-5 indent">
+                <label class="size-xs">{$t('settings.testWindow')}</label>
+                <input class="form-control-sm" type="number" min="6" max="240" step="6" value={settingsCache.departureWindowHours} on:change={onRouteDepartureWindowChange} />
+            </div>
+            <div class="form-row mb-10 indent">
+                <label class="size-xs">{$t('settings.testEvery')}</label>
+                <input class="form-control-sm" type="number" min="1" max="24" step="1" value={settingsCache.departureStepHours} on:change={onRouteDepartureStepChange} />
+            </div>
+        {/if}
+
+        <hr class="mt-15 mb-15" />
+
         <WaypointPanel
             bind:this={waypointPanel}
             bind:waypoints={waypoints}
@@ -110,6 +153,10 @@
             </p>
         {/if}
 
+        <div class="route-warning size-xs mt-10">
+            {$t('route.safetyWarning')}
+        </div>
+
         {#if progressMsg}
             <p class="size-xs fg-grey mt-5">{progressMsg}</p>
         {/if}
@@ -125,7 +172,6 @@
 
     {:else if activeTab === 'settings'}
         <SettingsPanel
-            bind:this={settingsPanel}
             value={settingsCache}
             on:change={onSettingsChange}
         />
@@ -142,6 +188,20 @@
             on:animationControl={onAnimationControl}
             on:selectPrimaryRoute={onSelectPrimaryRoute}
         />
+
+    {:else if activeTab === 'info'}
+        <div class="info-panel size-xs">
+            <h4 class="size-s mb-10">{$t('info.title')}</h4>
+            <p class="mb-10">
+                {$t('info.educational')}
+            </p>
+            <p class="mb-10">
+                {$t('info.liability')}
+            </p>
+            <p class="fg-grey">
+                {$t('info.verify')}
+            </p>
+        </div>
     {/if}
 </section>
 
@@ -169,12 +229,14 @@
     import type { ElevationGrid } from './lib/windgrid';
     import { computeRoute, computeRouteWithDepartureOptimization } from './lib/routing';
     import { saveWaypoints, loadWaypoints } from './lib/waypoints';
+    import { loadAllPolars } from './lib/polar';
 
     import type { LatLon } from '@windy/interfaces';
     import { t, tGet, initLocale } from './lib/i18n';
 
     const { title, name } = config;
     const SETTINGS_STORAGE_KEY = 'windy-router-settings';
+    const SELECTED_POLAR_KEY = 'windy-router-selected-polar';
     const ALT_OBJECTIVE_MODES: OptimizationMode[] = [
         'min-time',
         'min-motoring',
@@ -184,7 +246,7 @@
     ];
 
     // --- State ---
-    let activeTab: 'route' | 'polars' | 'settings' | 'results' = 'route';
+    let activeTab: 'route' | 'polars' | 'settings' | 'results' | 'info' = 'route';
 
     // Waypoints
     let waypoints: Waypoint[] = [];
@@ -193,9 +255,10 @@
 
     // Polars
     let currentPolar: PolarDiagram | null = null;
+    let routePolarNames: string[] = [];
+    let routeSelectedPolarName = '';
 
     // Settings
-    let settingsPanel: SettingsPanel;
     let settingsCache: Partial<RouteConfig> & { motor: typeof DEFAULT_MOTOR_CONFIG } = {
         departureTime: Date.now() + 3600 * 1000,
         timeStepHours: 1,
@@ -244,6 +307,11 @@
     const NOGO_STORAGE_KEY = 'windy-router-nogo-zones';
 
     $: canCompute = waypoints.length >= 2 && currentPolar !== null;
+    $: routeSelectedPolarName = currentPolar?.name || '';
+    $: routeDepartureDateStr = formatInputDate(
+        settingsCache.departureTime || Date.now() + 3600 * 1000,
+        Boolean(settingsCache.useLocalTime),
+    );
 
     // --- Reactive: redraw map layers when waypoints change ---
     $: drawWaypointMarkers(waypoints);
@@ -264,6 +332,110 @@
     function onSettingsChange(e: CustomEvent) {
         settingsCache = e.detail;
         localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settingsCache));
+    }
+
+    function updateSettingsCache(next: Partial<RouteConfig>) {
+        settingsCache = {
+            ...settingsCache,
+            ...next,
+        };
+        localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settingsCache));
+    }
+
+    function setActiveTab(nextTab: 'route' | 'polars' | 'settings' | 'results' | 'info') {
+        activeTab = nextTab;
+        if (nextTab === 'route') {
+            refreshRoutePolarList();
+        }
+    }
+
+    function refreshRoutePolarList() {
+        routePolarNames = Object.keys(loadAllPolars());
+    }
+
+    function restoreSelectedPolar() {
+        const savedPolarName = localStorage.getItem(SELECTED_POLAR_KEY);
+        if (!savedPolarName) {
+            refreshRoutePolarList();
+            return;
+        }
+        const all = loadAllPolars();
+        currentPolar = all[savedPolarName] ?? null;
+        refreshRoutePolarList();
+    }
+
+    function onRoutePolarChange(e: Event) {
+        const selectedName = (e.target as HTMLSelectElement).value;
+        routeSelectedPolarName = selectedName;
+
+        if (!selectedName) {
+            currentPolar = null;
+            localStorage.removeItem(SELECTED_POLAR_KEY);
+            return;
+        }
+
+        const all = loadAllPolars();
+        currentPolar = all[selectedName] ?? null;
+        if (currentPolar) {
+            localStorage.setItem(SELECTED_POLAR_KEY, selectedName);
+        }
+    }
+
+    function pad2(v: number): string {
+        return String(v).padStart(2, '0');
+    }
+
+    function formatInputDate(ts: number, isLocal: boolean): string {
+        const d = new Date(ts);
+        if (isLocal) {
+            return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+        }
+        return `${d.getUTCFullYear()}-${pad2(d.getUTCMonth() + 1)}-${pad2(d.getUTCDate())}T${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}`;
+    }
+
+    function parseInputDate(value: string, isLocal: boolean): number {
+        if (!value) return Date.now();
+        const date = isLocal ? new Date(value) : new Date(`${value}Z`);
+        const ts = date.getTime();
+        return Number.isFinite(ts) ? ts : Date.now();
+    }
+
+    function onRouteDepartureChange(e: Event) {
+        const value = (e.target as HTMLInputElement).value;
+        updateSettingsCache({
+            departureTime: parseInputDate(value, Boolean(settingsCache.useLocalTime)),
+        });
+    }
+
+    function onRouteUseLocalTimeChange(e: Event) {
+        const nextMode = (e.target as HTMLInputElement).checked;
+        const previousMode = Boolean(settingsCache.useLocalTime);
+        if (nextMode === previousMode) return;
+
+        const departureTs = parseInputDate(routeDepartureDateStr, previousMode);
+        updateSettingsCache({
+            useLocalTime: nextMode,
+            departureTime: departureTs,
+        });
+    }
+
+    function onRouteOptimizeDepartureChange(e: Event) {
+        const enabled = (e.target as HTMLInputElement).checked;
+        updateSettingsCache({ optimizeDeparture: enabled });
+    }
+
+    function onRouteDepartureWindowChange(e: Event) {
+        const value = (e.target as HTMLInputElement).valueAsNumber;
+        updateSettingsCache({
+            departureWindowHours: Number.isFinite(value) ? value : 72,
+        });
+    }
+
+    function onRouteDepartureStepChange(e: Event) {
+        const value = (e.target as HTMLInputElement).valueAsNumber;
+        updateSettingsCache({
+            departureStepHours: Number.isFinite(value) ? value : 6,
+        });
     }
 
     function loadSavedSettings() {
@@ -474,7 +646,7 @@
             store.set('overlay', 'wind');
 
             // Get latest settings
-            const settings = settingsPanel?.getSettings?.() ?? settingsCache;
+            const settings = settingsCache;
 
             // Fetch wind grid
             const windGrid: WindGrid = await fetchWindGrid(
@@ -942,6 +1114,7 @@
     // --- Lifecycle ---
     export const onopen = (params?: LatLon) => {
         loadSavedSettings();
+        restoreSelectedPolar();
         loadNoGoZones();
 
         // Load saved waypoints
@@ -1003,6 +1176,47 @@
     }
     .error-text {
         color: #f44336;
+    }
+    .form-row {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+    .form-control {
+        width: 100%;
+        padding: 4px 8px;
+        background: #222;
+        border: 1px solid #444;
+        color: #eee;
+        border-radius: 4px;
+        font-size: 12px;
+    }
+    .form-control-sm {
+        padding: 3px 6px;
+        background: #222;
+        border: 1px solid #444;
+        color: #eee;
+        border-radius: 4px;
+        font-size: 11px;
+        width: auto;
+        min-width: 80px;
+    }
+    .indent {
+        margin-left: 18px;
+    }
+    .route-warning {
+        color: #ffd180;
+        padding: 6px 8px;
+        background: rgba(255, 152, 0, 0.12);
+        border-left: 3px solid #ff9800;
+        border-radius: 4px;
+    }
+    .info-panel {
+        padding: 8px;
+        background: rgba(255,255,255,0.03);
+        border: 1px solid #444;
+        border-radius: 6px;
+        line-height: 1.4;
     }
     hr {
         border: none;
