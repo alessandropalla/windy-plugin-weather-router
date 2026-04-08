@@ -2,6 +2,13 @@
     {#if !result}
         <p class="size-xs fg-grey">{$t('results.empty')}</p>
     {:else}
+        {#if altitudeWarning}
+            <div class="danger-warning mb-10">
+                <span class="danger-icon" aria-hidden="true">⚠</span>
+                <span class="size-xs">{altitudeWarning}</span>
+            </div>
+        {/if}
+
         <!-- Summary Card -->
         <div class="summary-card mb-15">
             <div class="summary-title size-s mb-5">{$t('results.summary')}</div>
@@ -163,6 +170,10 @@
                 <input type="checkbox" bind:checked={showIsochrones} on:change={() => dispatch('toggleIsochrones', showIsochrones)} />
                 {$t('results.showIsochrones')}
             </label>
+            <label class="size-xs ml-10">
+                <input type="checkbox" bind:checked={showElevationGrid} on:change={() => dispatch('toggleElevationGrid', showElevationGrid)} />
+                {$t('results.showElevationGrid')}
+            </label>
         </div>
 
         <!-- Animate Route -->
@@ -269,6 +280,7 @@
                                 <th>{$t('results.maxWavesCol')}</th>
                                 <th>{$t('results.score')}</th>
                                 <th>{$t('results.status')}</th>
+                                <th>{$t('results.action')}</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -285,6 +297,18 @@
                                     <td>{dep.maxWaveM.toFixed(1)} m</td>
                                     <td>{dep.optimizationScore.toFixed(3)}</td>
                                     <td>{dep.selected ? $t('results.statusSelected') : $t('results.statusCandidate')}</td>
+                                    <td>
+                                        {#if dep.selected}
+                                            <span class="size-xs fg-grey">{$t('results.selected')}</span>
+                                        {:else}
+                                            <button
+                                                class="button button--variant-ghost size-xs"
+                                                on:click={() => dispatch('selectDepartureCandidate', { departureTime: dep.departureTime })}
+                                            >
+                                                {$t('results.makePrimary')}
+                                            </button>
+                                        {/if}
+                                    </td>
                                 </tr>
                             {/each}
                         </tbody>
@@ -302,14 +326,17 @@
 
     const dispatch = createEventDispatcher<{
         toggleIsochrones: boolean;
+        toggleElevationGrid: boolean;
         exportRoute: 'gpx' | 'csv' | 'geojson';
         animationControl: { playing: boolean; speed: number };
         selectPrimaryRoute: { alternativeIndex: number };
+        selectDepartureCandidate: { departureTime: number };
     }>();
 
     export let result: RouteResult | null = null;
     export let alternativeResults: RouteResult[] = [];
     export let alternativesRequested = false;
+    export let altitudeWarning: string | null = null;
     export let useLocalTime = false;
     export let animating = false;
 
@@ -318,6 +345,7 @@
     let twaChartEl: SVGSVGElement;
     let wavesChartEl: SVGSVGElement;
     let showIsochrones = false;
+    let showElevationGrid = false;
 
     // Animation
     let animSpeed = 5; // steps per second
@@ -688,6 +716,21 @@
     }
     .optimize-info {
         color: #4caf50;
+    }
+    .danger-warning {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        padding: 10px;
+        border: 1px solid #ff5a5f;
+        border-left: 4px solid #ff2f35;
+        border-radius: 6px;
+        background: rgba(255, 47, 53, 0.14);
+        color: #ffd7d8;
+    }
+    .danger-icon {
+        font-size: 16px;
+        line-height: 1;
     }
     .leg-table-wrap {
         overflow-x: auto;

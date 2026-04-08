@@ -113,6 +113,19 @@
         <label class="size-xs">{$t('settings.maxDuration')}</label>
         <input class="form-control-sm" type="number" min="12" max="480" step="12" bind:value={maxDurationHours} on:change={emitChange} />
     </div>
+    <div class="form-row mb-5">
+        <label class="size-xs">{$t('settings.elevationResolution')}</label>
+        <select class="form-control-sm" bind:value={elevationResolutionDeg} on:change={emitChange}>
+            <option value={0.12}>{$t('settings.elevationCoarse')}</option>
+            <option value={0.08}>{$t('settings.elevationStandard')}</option>
+            <option value={0.04}>{$t('settings.elevationFine')}</option>
+            <option value={0.02}>{$t('settings.elevationUltra')}</option>
+        </select>
+    </div>
+    <div class="form-row mb-10">
+        <label class="size-xs">{$t('settings.elevationBatchSize')}</label>
+        <input class="form-control-sm" type="number" min="8" max="128" step="4" bind:value={elevationBatchSize} on:change={emitChange} />
+    </div>
     <div class="form-row mb-10">
         <label class="size-xs">{$t('settings.maxWind')}</label>
         <input class="form-control-sm" type="number" min="0" max="80" step="1" bind:value={maxWindLimitKt} on:change={emitChange} />
@@ -186,6 +199,8 @@
     let optimizationMode: OptimizationMode = 'min-time';
     let maxDurationHours = 168; // 7 days
     let maxWindLimitKt = 25;
+    let elevationResolutionDeg = 0.04;
+    let elevationBatchSize = 36;
 
     // Safety & alternatives
     let useWaveLimit = false;
@@ -223,6 +238,8 @@
         angularResolution = next.angularResolution ?? angularResolution;
         maxDurationHours = next.maxDurationHours ?? maxDurationHours;
         maxWindLimitKt = next.maxWindLimitKt ?? maxWindLimitKt;
+        elevationResolutionDeg = next.elevationResolutionDeg ?? elevationResolutionDeg;
+        elevationBatchSize = next.elevationBatchSize ?? elevationBatchSize;
 
         useWaveLimit = typeof next.maxWaveHeightM === 'number' && next.maxWaveHeightM > 0;
         maxWaveHeightM = next.maxWaveHeightM || 4.0;
@@ -294,6 +311,8 @@
             product,
             useLocalTime,
             maxWindLimitKt,
+            elevationResolutionDeg,
+            elevationBatchSize,
             maxWaveHeightM: useWaveLimit ? maxWaveHeightM : 0,
             routeAlternatives,
             motor: {
@@ -325,6 +344,8 @@
             product,
             useLocalTime,
             maxWindLimitKt,
+            elevationResolutionDeg,
+            elevationBatchSize,
             maxWaveHeightM: useWaveLimit ? maxWaveHeightM : 0,
             routeAlternatives,
             motor: {

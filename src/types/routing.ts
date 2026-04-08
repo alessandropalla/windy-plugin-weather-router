@@ -46,6 +46,12 @@ export interface RouteConfig {
     maxWaveHeightM?: number;
     /** Whether to compute alternative routes using other optimization objectives. */
     routeAlternatives?: boolean;
+    /** Corridor width in nautical miles for elevation grid fetches. */
+    elevationCorridorNm?: number;
+    /** Elevation grid resolution in degrees (lower = denser, slower). */
+    elevationResolutionDeg?: number;
+    /** Number of concurrent elevation point requests per batch. */
+    elevationBatchSize?: number;
 }
 
 /** A single point on an isochrone front */

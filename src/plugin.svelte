@@ -177,6 +177,12 @@
         />
 
     {:else if activeTab === 'results'}
+        {#if routeAltitudeWarning}
+            <div class="results-altitude-warning size-xs mb-10">
+                <span class="warning-icon" aria-hidden="true">⚠</span>
+                <span>{routeAltitudeWarning}</span>
+            </div>
+        {/if}
         <ResultsPanel
             result={routeResult}
             alternativeResults={alternativeResults}
@@ -184,9 +190,11 @@
             useLocalTime={Boolean(settingsCache.useLocalTime)}
             animating={animPlaying}
             on:toggleIsochrones={onToggleIsochrones}
+            on:toggleElevationGrid={onToggleElevationGrid}
             on:exportRoute={onExportRoute}
             on:animationControl={onAnimationControl}
             on:selectPrimaryRoute={onSelectPrimaryRoute}
+            on:selectDepartureCandidate={onSelectDepartureCandidate}
         />
 
     {:else if activeTab === 'info'}
@@ -225,7 +233,7 @@
     import { DEFAULT_MOTOR_CONFIG } from './types/polar';
     import type { Waypoint, RouteConfig, RouteResult, IsochronePoint, NoGoZone, RoutingProgress, OptimizationMode } from './types/routing';
     import type { WindGrid } from './lib/windgrid';
-    import { fetchWindGrid, fetchElevationGrid } from './lib/windgrid';
+    import { fetchWindGrid, fetchElevationGrid, getElevationAtPoint, setElevationFetchBatchSize } from './lib/windgrid';
     import type { ElevationGrid } from './lib/windgrid';
     import { computeRoute, computeRouteWithDepartureOptimization } from './lib/routing';
     import { saveWaypoints, loadWaypoints } from './lib/waypoints';
@@ -270,6 +278,9 @@
         departureStepHours: 6,
         product: 'ecmwf',
         maxWindLimitKt: 25,
+        elevationCorridorNm: 60,
+        elevationResolutionDeg: 0.04,
+        elevationBatchSize: 36,
         maxWaveHeightM: 0,
         routeAlternatives: false,
         motor: { ...DEFAULT_MOTOR_CONFIG },
@@ -280,6 +291,7 @@
     let progressMsg = '';
     let errorMsg = '';
     let routeResult: RouteResult | null = null;
+    let routeAltitudeWarning: string | null = null;
 
     // Map layers
     let waypointMarkers: L.Marker[] = [];
@@ -287,11 +299,17 @@
     let optimalRoutePolyline: L.Polyline | null = null;
     let isochroneLines: L.Polyline[] = [];
     let showIsochrones = false;
+    let showElevationGrid = false;
+    let elevationGridLayers: L.Polygon[] = [];
 
     // Route alternatives
     let alternativeResults: RouteResult[] = [];
     let alternativePolylines: L.Polyline[][] = [];
     const ALT_COLORS = ['#6ab0de', '#9b8dc7'];
+
+    // Cached data from the last computation to support quick route variant switching.
+    let lastWindGrid: WindGrid | null = null;
+    let lastElevationGrid: ElevationGrid | null = null;
 
     // Animation
     let animTimer: ReturnType<typeof setInterval> | null = null;
@@ -326,6 +344,7 @@
         // Computed route is now stale — clear it from the map
         clearRouteDisplay();
         routeResult = null;
+        routeAltitudeWarning = null;
         alternativeResults = [];
     }
 
@@ -639,6 +658,7 @@
         progressMsg = tGet('progress.fetchingWind');
         errorMsg = '';
         routeResult = null;
+        routeAltitudeWarning = null;
         clearRouteDisplay();
 
         try {
@@ -662,16 +682,20 @@
 
             // Fetch elevation grid for land avoidance
             progressMsg = tGet('progress.fetchingElev');
+            setElevationFetchBatchSize(settings.elevationBatchSize || 36);
             const elevationGrid: ElevationGrid = await fetchElevationGrid(
                 waypoints,
-                60,
-                0.1,
+                settings.elevationCorridorNm || 60,
+                settings.elevationResolutionDeg || 0.04,
                 (fetched, total) => {
                     progressMsg = tGet('progress.fetchingElevN', { fetched, total });
                 },
             );
 
             progressMsg = tGet('progress.isochrone');
+
+            lastWindGrid = windGrid;
+            lastElevationGrid = elevationGrid;
 
             // Build full config
             const routeConfig: RouteConfig = {
@@ -704,6 +728,7 @@
                 ...result,
                 variantLabel: 'Primary',
             };
+            routeAltitudeWarning = evaluateRouteAltitudeWarning(routeResult, elevationGrid);
             drawOptimalRoute(result);
 
             // Alternative routes (compare optimization objectives)
@@ -788,6 +813,10 @@
         if (showIsochrones) {
             drawIsochrones(result);
         }
+
+        if (showElevationGrid && lastElevationGrid) {
+            drawElevationGrid(lastElevationGrid, result.optimalPath);
+        }
     }
 
     function drawIsochrones(result: RouteResult) {
@@ -822,6 +851,10 @@
         toggleIsochroneDisplay(e.detail);
     }
 
+    function onToggleElevationGrid(e: CustomEvent<boolean>) {
+        toggleElevationGridDisplay(e.detail);
+    }
+
     function onExportRoute(e: CustomEvent<'gpx' | 'csv' | 'geojson'>) {
         void exportRoute(e.detail);
     }
@@ -832,6 +865,10 @@
 
     function onSelectPrimaryRoute(e: CustomEvent<{ alternativeIndex: number }>) {
         selectPrimaryRouteVariant(e.detail.alternativeIndex);
+    }
+
+    function onSelectDepartureCandidate(e: CustomEvent<{ departureTime: number }>) {
+        void selectPrimaryDepartureCandidate(e.detail.departureTime);
     }
 
     // --- Alternative routes ---
@@ -871,6 +908,7 @@
             ...selectedAlternative,
             variantLabel: 'Primary',
         };
+        routeAltitudeWarning = evaluateRouteAltitudeWarning(routeResult, lastElevationGrid);
 
         const previousPrimaryVariantLabel =
             previousPrimary.variantLabel && previousPrimary.variantLabel !== 'Primary'
@@ -887,6 +925,121 @@
 
         drawOptimalRoute(routeResult);
         drawAlternativeRoutes(alternativeResults);
+    }
+
+    async function selectPrimaryDepartureCandidate(departureTime: number) {
+        if (!routeResult || !routeResult.departureAnalysis || routeResult.departureAnalysis.length === 0) {
+            return;
+        }
+
+        if (!currentPolar || !lastWindGrid || !lastElevationGrid) {
+            errorMsg = tGet('results.departureSwitchDataMissing');
+            return;
+        }
+
+        const selectedCandidateExists = routeResult.departureAnalysis.some(row => row.departureTime === departureTime);
+        if (!selectedCandidateExists) {
+            return;
+        }
+
+        computing = true;
+        errorMsg = '';
+        progressMsg = tGet('results.switchingDeparture');
+
+        try {
+            const settings = settingsCache;
+            const routeConfig: RouteConfig = {
+                departureTime,
+                timeStepHours: settings.timeStepHours || 1,
+                angularResolution: settings.angularResolution || 10,
+                maxDurationHours: settings.maxDurationHours || 168,
+                mode: settings.mode || 'min-time',
+                arrivalDeadline: settings.arrivalDeadline,
+                optimizeDeparture: false,
+                departureWindowHours: settings.departureWindowHours || 72,
+                departureStepHours: settings.departureStepHours || 6,
+                product: settings.product || 'ecmwf',
+                maxWindLimitKt: settings.maxWindLimitKt ?? 25,
+                maxWaveHeightM: settings.maxWaveHeightM ?? 0,
+                routeAlternatives: false,
+                boat: {
+                    polar: currentPolar,
+                    motor: settings.motor || DEFAULT_MOTOR_CONFIG,
+                },
+            };
+
+            const switched = await runRoutingTask(routeConfig, lastWindGrid, lastElevationGrid, p => {
+                progressMsg = p.message;
+            });
+
+            const updatedDepartureAnalysis = routeResult.departureAnalysis.map(row => ({
+                ...row,
+                selected: row.departureTime === departureTime,
+            }));
+
+            routeResult = {
+                ...switched,
+                variantLabel: 'Primary',
+                optimizedDeparture: true,
+                departureAnalysis: updatedDepartureAnalysis,
+            };
+
+            routeAltitudeWarning = evaluateRouteAltitudeWarning(routeResult, lastElevationGrid);
+            drawOptimalRoute(routeResult);
+            drawAlternativeRoutes(alternativeResults);
+            progressMsg = '';
+        } catch (e) {
+            errorMsg = tGet('error.routingFailed', { msg: (e as Error).message });
+            progressMsg = '';
+        } finally {
+            computing = false;
+        }
+    }
+
+    function evaluateRouteAltitudeWarning(result: RouteResult | null, elevationGrid: ElevationGrid | null): string | null {
+        if (!result || !elevationGrid || result.optimalPath.length < 2) {
+            return null;
+        }
+
+        const ALTITUDE_ALERT_THRESHOLD_M = 0.5;
+        const SEGMENT_SAMPLES = 20;
+
+        let maxElevationM = 0;
+        let offSeaSamples = 0;
+
+        const recordElevation = (lat: number, lon: number) => {
+            const elev = getElevationAtPoint(lat, lon, elevationGrid);
+            if (elev > maxElevationM) {
+                maxElevationM = elev;
+            }
+            if (elev > ALTITUDE_ALERT_THRESHOLD_M) {
+                offSeaSamples++;
+            }
+        };
+
+        for (let i = 0; i < result.optimalPath.length; i++) {
+            const point = result.optimalPath[i];
+            recordElevation(point.lat, point.lon);
+
+            if (i === 0) continue;
+
+            const prev = result.optimalPath[i - 1];
+            for (let s = 1; s < SEGMENT_SAMPLES; s++) {
+                const frac = s / SEGMENT_SAMPLES;
+                const lat = prev.lat + (point.lat - prev.lat) * frac;
+                const lon = prev.lon + (point.lon - prev.lon) * frac;
+                recordElevation(lat, lon);
+            }
+        }
+
+        if (offSeaSamples === 0) {
+            return null;
+        }
+
+        return tGet('results.altitudeWarning', {
+            max: maxElevationM.toFixed(0),
+            samples: offSeaSamples,
+        });
     }
 
     // --- Animation ---
@@ -951,8 +1104,164 @@
         }
         for (const l of isochroneLines) safeRemoveLayer(l);
         isochroneLines = [];
+        for (const layer of elevationGridLayers) safeRemoveLayer(layer);
+        elevationGridLayers = [];
         clearAlternativeRoutes();
         stopAnimation();
+    }
+
+    function toggleElevationGridDisplay(show: boolean) {
+        showElevationGrid = show;
+        for (const layer of elevationGridLayers) safeRemoveLayer(layer);
+        elevationGridLayers = [];
+
+        if (!show || !lastElevationGrid) {
+            return;
+        }
+
+        drawElevationGrid(lastElevationGrid, routeResult?.optimalPath || []);
+    }
+
+    function drawElevationGrid(grid: ElevationGrid, path: IsochronePoint[]) {
+        for (const layer of elevationGridLayers) safeRemoveLayer(layer);
+        elevationGridLayers = [];
+
+        if (path.length < 2) {
+            return;
+        }
+
+        const latCells = Math.max(0, grid.latCount - 1);
+        const lonCells = Math.max(0, grid.lonCount - 1);
+        const totalCells = latCells * lonCells;
+        let stride = 1;
+        if (totalCells > 40000) stride = 2;
+        if (totalCells > 120000) stride = 3;
+
+        const ROUTE_CORRIDOR_NM = 16;
+        const routeSamples = buildRouteSamples(path, 260);
+        const bounds = computeSampleBounds(routeSamples);
+        const latPad = ROUTE_CORRIDOR_NM / 60;
+        const lonPad = latPad / Math.max(0.2, Math.cos((bounds.midLat * Math.PI) / 180));
+        const minLat = bounds.minLat - latPad;
+        const maxLat = bounds.maxLat + latPad;
+        const minLon = bounds.minLon - lonPad;
+        const maxLon = bounds.maxLon + lonPad;
+
+        for (let i = 0; i < latCells; i += stride) {
+            for (let j = 0; j < lonCells; j += stride) {
+                const lat1 = grid.minLat + i * grid.latStep;
+                const lon1 = grid.minLon + j * grid.lonStep;
+                const lat2 = grid.minLat + Math.min(grid.latCount - 1, i + stride) * grid.latStep;
+                const lon2 = grid.minLon + Math.min(grid.lonCount - 1, j + stride) * grid.lonStep;
+                const centerLat = (lat1 + lat2) / 2;
+                const centerLon = (lon1 + lon2) / 2;
+                const elev = getElevationAtPoint(centerLat, centerLon, grid);
+                const isSeaCell = elev <= 0;
+                // Keep sea visible without overwhelming the overlay budget.
+                if (isSeaCell && ((i + j) % (2 * stride) !== 0)) {
+                    continue;
+                }
+
+                if (centerLat < minLat || centerLat > maxLat || centerLon < minLon || centerLon > maxLon) {
+                    continue;
+                }
+
+                if (distanceToSampledRouteNm(centerLat, centerLon, routeSamples) > ROUTE_CORRIDOR_NM) {
+                    continue;
+                }
+
+                const style = elevationStyle(elev);
+
+                const cell = new L.Polygon(
+                    [[
+                        [lat1, lon1],
+                        [lat1, lon2],
+                        [lat2, lon2],
+                        [lat2, lon1],
+                    ]],
+                    {
+                        color: style.color,
+                        weight: 0,
+                        fillColor: style.color,
+                        fillOpacity: style.fillOpacity,
+                        interactive: false,
+                    },
+                ).addTo(map);
+
+                elevationGridLayers.push(cell);
+                rememberRouteLayer(cell);
+            }
+        }
+    }
+
+    function buildRouteSamples(path: IsochronePoint[], maxSamples = 260): { lat: number; lon: number }[] {
+        const samples: { lat: number; lon: number }[] = [];
+        const step = Math.max(1, Math.floor(path.length / maxSamples));
+
+        for (let i = 0; i < path.length; i += step) {
+            samples.push({ lat: path[i].lat, lon: path[i].lon });
+            if (i + step < path.length) {
+                const next = path[i + step];
+                samples.push({
+                    lat: (path[i].lat + next.lat) / 2,
+                    lon: (path[i].lon + next.lon) / 2,
+                });
+            }
+        }
+
+        const last = path[path.length - 1];
+        samples.push({ lat: last.lat, lon: last.lon });
+        return samples;
+    }
+
+    function computeSampleBounds(samples: { lat: number; lon: number }[]) {
+        let minLat = Infinity;
+        let maxLat = -Infinity;
+        let minLon = Infinity;
+        let maxLon = -Infinity;
+        for (const p of samples) {
+            if (p.lat < minLat) minLat = p.lat;
+            if (p.lat > maxLat) maxLat = p.lat;
+            if (p.lon < minLon) minLon = p.lon;
+            if (p.lon > maxLon) maxLon = p.lon;
+        }
+        return {
+            minLat,
+            maxLat,
+            minLon,
+            maxLon,
+            midLat: (minLat + maxLat) / 2,
+        };
+    }
+
+    function distanceToSampledRouteNm(lat: number, lon: number, samples: { lat: number; lon: number }[]): number {
+        let best = Number.POSITIVE_INFINITY;
+        const latScale = 60;
+        for (const p of samples) {
+            const dLatNm = (p.lat - lat) * latScale;
+            const lonScale = latScale * Math.cos((lat * Math.PI) / 180);
+            const dLonNm = (p.lon - lon) * lonScale;
+            const d = Math.hypot(dLatNm, dLonNm);
+            if (d < best) {
+                best = d;
+            }
+        }
+        return best;
+    }
+
+    function elevationColor(elevMeters: number): string {
+        if (elevMeters <= 0) return '#2f6fb4';
+        if (elevMeters < 50) return '#f1c40f';
+        if (elevMeters < 200) return '#e67e22';
+        if (elevMeters < 800) return '#d35400';
+        return '#c0392b';
+    }
+
+    function elevationStyle(elevMeters: number): { color: string; fillOpacity: number } {
+        return {
+            color: elevationColor(elevMeters),
+            fillOpacity: 0.7,
+        };
     }
 
     function windSpeedColor(tws: number): string {
@@ -1210,6 +1519,21 @@
         background: rgba(255, 152, 0, 0.12);
         border-left: 3px solid #ff9800;
         border-radius: 4px;
+    }
+    .results-altitude-warning {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        color: #ffd7d8;
+        padding: 10px;
+        background: rgba(255, 47, 53, 0.14);
+        border: 1px solid #ff5a5f;
+        border-left: 4px solid #ff2f35;
+        border-radius: 6px;
+    }
+    .warning-icon {
+        font-size: 16px;
+        line-height: 1;
     }
     .info-panel {
         padding: 8px;

@@ -348,6 +348,175 @@ export interface ElevationGrid {
 }
 
 const LAND_ELEVATION_THRESHOLD = 0; // meters AMSL — anything above is land
+const ELEVATION_BATCH_SIZE = 36;
+let currentElevationBatchSize = ELEVATION_BATCH_SIZE;
+const MAX_ELEVATION_POINT_CACHE = 120000;
+const MAX_ELEVATION_GRID_CACHE = 10;
+const MAX_PERSISTED_ELEVATION_POINTS = 20000;
+const ELEVATION_POINT_CACHE_STORAGE_KEY = 'windy-router-elevation-point-cache-v1';
+const ELEVATION_POINT_CACHE_FLUSH_EVERY = 120;
+
+const elevationPointCache = new Map<string, number>();
+const elevationPointCacheOrder: string[] = [];
+const elevationInflight = new Map<string, Promise<number>>();
+const elevationGridCache = new Map<string, ElevationGrid>();
+const elevationGridCacheOrder: string[] = [];
+let elevationCacheHydrated = false;
+let elevationPointWritesSinceFlush = 0;
+
+function getLocalStorageSafe(): Storage | null {
+    try {
+        if (typeof localStorage === 'undefined') {
+            return null;
+        }
+        return localStorage;
+    } catch {
+        return null;
+    }
+}
+
+function hydrateElevationPointCacheFromStorage() {
+    if (elevationCacheHydrated) {
+        return;
+    }
+    elevationCacheHydrated = true;
+
+    const storage = getLocalStorageSafe();
+    if (!storage) {
+        return;
+    }
+
+    try {
+        const raw = storage.getItem(ELEVATION_POINT_CACHE_STORAGE_KEY);
+        if (!raw) {
+            return;
+        }
+        const parsed = JSON.parse(raw) as [string, number][];
+        if (!Array.isArray(parsed)) {
+            return;
+        }
+
+        for (const entry of parsed) {
+            if (!Array.isArray(entry) || entry.length !== 2) {
+                continue;
+            }
+            const [key, value] = entry;
+            if (typeof key !== 'string' || typeof value !== 'number' || !Number.isFinite(value)) {
+                continue;
+            }
+            putPointCache(key, value, false);
+        }
+    } catch {
+        // Ignore invalid cache payload.
+    }
+}
+
+function flushElevationPointCacheToStorage(force = false) {
+    if (!force && elevationPointWritesSinceFlush < ELEVATION_POINT_CACHE_FLUSH_EVERY) {
+        return;
+    }
+    elevationPointWritesSinceFlush = 0;
+
+    const storage = getLocalStorageSafe();
+    if (!storage) {
+        return;
+    }
+
+    try {
+        const start = Math.max(0, elevationPointCacheOrder.length - MAX_PERSISTED_ELEVATION_POINTS);
+        const keys = elevationPointCacheOrder.slice(start);
+        const payload: [string, number][] = [];
+        for (const key of keys) {
+            const value = elevationPointCache.get(key);
+            if (value !== undefined) {
+                payload.push([key, value]);
+            }
+        }
+        storage.setItem(ELEVATION_POINT_CACHE_STORAGE_KEY, JSON.stringify(payload));
+    } catch {
+        // Ignore storage quota and serialization issues.
+    }
+}
+
+function toGridCacheKey(minLat: number, maxLat: number, minLon: number, maxLon: number, resolution: number): string {
+    return [
+        minLat.toFixed(5),
+        maxLat.toFixed(5),
+        minLon.toFixed(5),
+        maxLon.toFixed(5),
+        resolution.toFixed(5),
+    ].join('|');
+}
+
+function toPointCacheKey(lat: number, lon: number): string {
+    return `${lat.toFixed(5)}|${lon.toFixed(5)}`;
+}
+
+function putPointCache(key: string, elevation: number, trackWrite = true) {
+    if (!elevationPointCache.has(key)) {
+        elevationPointCacheOrder.push(key);
+    }
+    elevationPointCache.set(key, elevation);
+
+    if (trackWrite) {
+        elevationPointWritesSinceFlush++;
+        flushElevationPointCacheToStorage(false);
+    }
+
+    while (elevationPointCacheOrder.length > MAX_ELEVATION_POINT_CACHE) {
+        const oldest = elevationPointCacheOrder.shift();
+        if (oldest) {
+            elevationPointCache.delete(oldest);
+        }
+    }
+}
+
+function putGridCache(key: string, grid: ElevationGrid) {
+    if (!elevationGridCache.has(key)) {
+        elevationGridCacheOrder.push(key);
+    }
+    elevationGridCache.set(key, grid);
+
+    while (elevationGridCacheOrder.length > MAX_ELEVATION_GRID_CACHE) {
+        const oldest = elevationGridCacheOrder.shift();
+        if (oldest) {
+            elevationGridCache.delete(oldest);
+        }
+    }
+}
+
+async function getElevationCached(lat: number, lon: number): Promise<number> {
+    hydrateElevationPointCacheFromStorage();
+
+    const key = toPointCacheKey(lat, lon);
+    const cached = elevationPointCache.get(key);
+    if (cached !== undefined) {
+        return cached;
+    }
+
+    const inflight = elevationInflight.get(key);
+    if (inflight) {
+        return inflight;
+    }
+
+    const request = getElevation(lat, lon)
+        .then((resp: HttpPayload<number>) => {
+            const elev = resp.data;
+            putPointCache(key, elev);
+            return elev;
+        })
+        .catch(() => {
+            // On error, assume water.
+            putPointCache(key, 0);
+            return 0;
+        })
+        .finally(() => {
+            elevationInflight.delete(key);
+        });
+
+    elevationInflight.set(key, request);
+    return request;
+}
 
 /**
  * Fetch an elevation grid covering the route corridor.
@@ -372,10 +541,22 @@ export async function fetchElevationGrid(
     minLon -= corridorDeg;
     maxLon += corridorDeg;
 
+    const gridCacheKey = toGridCacheKey(minLat, maxLat, minLon, maxLon, resolution);
+    const cachedGrid = elevationGridCache.get(gridCacheKey);
+    if (cachedGrid) {
+        const totalCached = cachedGrid.latCount * cachedGrid.lonCount;
+        onProgress?.(totalCached, totalCached);
+        return cachedGrid;
+    }
+
     const gridLats: number[] = [];
     const gridLons: number[] = [];
-    for (let lat = minLat; lat <= maxLat; lat += resolution) gridLats.push(lat);
-    for (let lon = minLon; lon <= maxLon; lon += resolution) gridLons.push(lon);
+    for (let lat = minLat; lat <= maxLat; lat += resolution) {
+        gridLats.push(lat);
+    }
+    for (let lon = minLon; lon <= maxLon; lon += resolution) {
+        gridLons.push(lon);
+    }
 
     const latCount = gridLats.length;
     const lonCount = gridLons.length;
@@ -392,27 +573,20 @@ export async function fetchElevationGrid(
         }
     }
 
-    const BATCH_SIZE = 16;
+    const batchSize = Math.max(1, Math.floor(currentElevationBatchSize));
     let fetched = 0;
 
-    for (let i = 0; i < requests.length; i += BATCH_SIZE) {
-        const batch = requests.slice(i, i + BATCH_SIZE);
-        const promises = batch.map(({ latIdx, lonIdx, lat, lon }) =>
-            getElevation(lat, lon)
-                .then((resp: HttpPayload<number>) => {
-                    data[latIdx][lonIdx] = resp.data;
-                })
-                .catch(() => {
-                    // On error, assume water (0)
-                    data[latIdx][lonIdx] = 0;
-                }),
-        );
+    for (let i = 0; i < requests.length; i += batchSize) {
+        const batch = requests.slice(i, i + batchSize);
+        const promises = batch.map(async ({ latIdx, lonIdx, lat, lon }) => {
+            data[latIdx][lonIdx] = await getElevationCached(lat, lon);
+        });
         await Promise.all(promises);
         fetched += batch.length;
         onProgress?.(Math.min(fetched, totalPoints), totalPoints);
     }
 
-    return {
+    const grid: ElevationGrid = {
         data,
         minLat: gridLats[0],
         minLon: gridLons[0],
@@ -421,6 +595,17 @@ export async function fetchElevationGrid(
         latCount,
         lonCount,
     };
+
+    putGridCache(gridCacheKey, grid);
+    flushElevationPointCacheToStorage(true);
+    return grid;
+}
+
+export function setElevationFetchBatchSize(batchSize: number) {
+    if (!Number.isFinite(batchSize)) {
+        return;
+    }
+    currentElevationBatchSize = Math.max(1, Math.floor(batchSize));
 }
 
 /** Get bilinear-interpolated elevation at a point from the cached grid. */
