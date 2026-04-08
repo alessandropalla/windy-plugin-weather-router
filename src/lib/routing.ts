@@ -1,4 +1,4 @@
-import { getWindAtPointAndTime } from './windgrid';
+import { getWindAtPointAndTime, isPointOnLand, isLegOverLand } from './windgrid';
 import { interpolateBoatSpeed } from './polar';
 import {
     distanceNm,
@@ -7,7 +7,6 @@ import {
     computeTWA,
     normalizeAngle,
 } from './geo';
-import { isPointOnLand, isLegOverLand } from './windgrid';
 import { isPointInNoGoZone, isLegCrossingNoGoZone } from './nogozones';
 import type { MotorConfig } from '../types/polar';
 import type {
@@ -173,7 +172,9 @@ export function computeRoute(
                     const nearWaypoint = waypoints.some(
                         wp => distanceNm(parent.lat, parent.lon, wp.lat, wp.lon) <= ARRIVAL_RADIUS_NM,
                     );
-                    if (!nearWaypoint) continue;
+                    if (!nearWaypoint) {
+                        continue;
+                    }
                 }
 
                 // Look up boat speed from polars
@@ -215,7 +216,9 @@ export function computeRoute(
                     const nearWaypoint = waypoints.some(
                         wp => distanceNm(newLat, newLon, wp.lat, wp.lon) <= ARRIVAL_RADIUS_NM,
                     );
-                    if (!nearWaypoint) continue;
+                    if (!nearWaypoint) {
+                        continue;
+                    }
                 }
 
                 // Land avoidance: skip if destination or leg crosses land,
@@ -244,7 +247,7 @@ export function computeRoute(
                     }
                 }
 
-                const newPoint: IsochronePoint = {
+                let newPoint: IsochronePoint = {
                     lat: newLat,
                     lon: newLon,
                     time: currentTime,
@@ -266,6 +269,13 @@ export function computeRoute(
                 // Check if this point has reached the current target waypoint
                 const distToTarget = distanceNm(newLat, newLon, targetWp.lat, targetWp.lon);
                 if (distToTarget <= ARRIVAL_RADIUS_NM) {
+                    // Snap to the exact waypoint so the reconstructed route always passes through it.
+                    newPoint = {
+                        ...newPoint,
+                        lat: targetWp.lat,
+                        lon: targetWp.lon,
+                    };
+
                     if (parent.waypointIndex >= waypoints.length - 1) {
                             // Reached final destination. Keep candidate for objective-based ranking.
                             arrivedCandidates.push({

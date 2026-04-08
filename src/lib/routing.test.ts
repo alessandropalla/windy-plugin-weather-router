@@ -95,6 +95,26 @@ describe('routing computeRoute metrics and scoring', () => {
         ).toThrowError(/Arrival deadline/);
     });
 
+    it('passes exactly through intermediate waypoints', () => {
+        const multiWaypointRoute: Waypoint[] = [
+            { lat: 0, lon: 0, name: 'Start' },
+            { lat: 0, lon: 0.05, name: 'Mid' },
+            { lat: 0, lon: 0.1, name: 'Finish' },
+        ];
+
+        const result = computeRoute(
+            multiWaypointRoute,
+            makeConfig('min-time'),
+            { points: [], bounds: { minLat: -1, maxLat: 1, minLon: -1, maxLon: 1 }, resolution: 1 },
+        );
+
+        const containsMidpoint = result.optimalPath.some(
+            p => Math.abs(p.lat - multiWaypointRoute[1].lat) < 1e-9 && Math.abs(p.lon - multiWaypointRoute[1].lon) < 1e-9,
+        );
+
+        expect(containsMidpoint).toBe(true);
+    });
+
     it('optimizes departure and returns ordered departure analysis', () => {
         const base = makeConfig('min-time');
         const config: RouteConfig = {
