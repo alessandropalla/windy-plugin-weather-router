@@ -46,6 +46,12 @@ export interface RouteConfig {
     maxWaveHeightM?: number;
     /** Whether to compute alternative routes using other optimization objectives. */
     routeAlternatives?: boolean;
+    /** Corridor width in nautical miles for elevation grid fetches. */
+    elevationCorridorNm?: number;
+    /** Elevation grid resolution in degrees (lower = denser, slower). */
+    elevationResolutionDeg?: number;
+    /** Number of concurrent elevation point requests per batch. */
+    elevationBatchSize?: number;
 }
 
 /** A single point on an isochrone front */
@@ -62,6 +68,8 @@ export interface IsochronePoint {
     boatSpeed: number;
     /** True wind speed at this point (knots) */
     tws: number;
+    /** Gust speed at this point (knots) */
+    gust: number;
     /** True wind direction at this point (degrees) */
     twd: number;
     /** True wind angle at this point (degrees, 0-180) */

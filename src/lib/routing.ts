@@ -119,6 +119,7 @@ export function computeRoute(
             heading: 0,
             boatSpeed: 0,
             tws: 0,
+            gust: 0,
             twd: 0,
             twa: 0,
             waveHeight: 0,
@@ -255,6 +256,7 @@ export function computeRoute(
                     heading: hdg,
                     boatSpeed,
                     tws: wind.tws,
+                    gust: wind.gust,
                     twd: wind.twd,
                     twa,
                     waveHeight: wind.waveHeight,
@@ -670,8 +672,8 @@ function computeMetrics(path: IsochronePoint[], waypoints: Waypoint[], motor: Mo
         if (curr.tws > maxWind) {
             maxWind = curr.tws;
         }
-        if (curr.tws > maxGust) {
-            maxGust = curr.tws;
+        if (curr.gust > maxGust) {
+            maxGust = curr.gust;
         }
         if (curr.waveHeight > maxWave) {
             maxWave = curr.waveHeight;

@@ -12,9 +12,20 @@ const en: Record<string, string> = {
     'tab.polars': '📊 Polars',
     'tab.settings': '⚙ Settings',
     'tab.results': '📈 Results',
+    'tab.info': 'ℹ Info',
+
+    // Info tab
+    'info.title': 'Important Notice',
+    'info.educational': 'This plugin is provided for educational and informational purposes only.',
+    'info.liability': 'By using this plugin, you acknowledge that you are solely responsible for all decisions and actions taken based on its output. The authors and contributors disclaim all liability for any loss, damage, injury, or consequences arising from its use.',
+    'info.verify': 'Always independently verify routes, weather, hazards, regulations, and navigation details using official and up-to-date nautical charts and instruments.',
 
     // Route tab — hints & no-go zones
     'route.hint': 'Click "+ Add Waypoint", then left-click on the map to place points.',
+    'route.basic': 'Basic Route Setup',
+    'route.selectPolar': 'Polar diagram:',
+    'route.polarHint': 'Manage or create polars in the Polars tab.',
+    'route.safetyWarning': 'Safety warning: Always verify the computed route. Routes may cross land or unsafe areas. Double-check with nautical charts before navigation.',
     'nogo.title': '🚫 No-Go Zones',
     'nogo.drawing': 'Click on the map to add vertices ({count} placed). Need at least 3 points.',
     'nogo.finish': '✓ Finish Zone',
@@ -27,7 +38,7 @@ const en: Record<string, string> = {
     'btn.compute': 'Compute Weather Route',
     'btn.computing': 'Computing…',
     'compute.noWaypoints': 'Add at least 2 waypoints to compute a route.',
-    'compute.noPolar': 'Select a polar diagram in the Polars tab.',
+    'compute.noPolar': 'Select a polar diagram in the Route tab (or manage one in Polars).',
 
     // Progress / error messages
     'progress.fetchingWind': 'Fetching wind data…',
@@ -48,6 +59,7 @@ const en: Record<string, string> = {
     // Map popup
     'popup.speed': 'Speed',
     'popup.wind': 'Wind',
+    'popup.gust': 'Gust',
     'popup.waves': 'Waves',
     'popup.twa': 'TWA',
     'popup.motoring': '⚙ Motoring',
@@ -97,6 +109,12 @@ const en: Record<string, string> = {
     'settings.lowerWaveExposure': 'Lower wave exposure',
     'settings.deadlineNote': 'Arrival deadline mode uses fastest route that still meets the deadline.',
     'settings.maxDuration': 'Max duration (hours):',
+    'settings.elevationResolution': 'Elevation fetch detail:',
+    'settings.elevationBatchSize': 'Elevation batch size:',
+    'settings.elevationCoarse': 'Coarse (fast)',
+    'settings.elevationStandard': 'Standard',
+    'settings.elevationFine': 'Fine',
+    'settings.elevationUltra': 'Ultra (slow)',
     'settings.maxWind': 'Max wind limit (kt):',
     'settings.maxWindNote': 'Default 25 kt, set 0 to disable.',
     'settings.maxWaveLimit': 'Max wave height limit',
@@ -128,6 +146,7 @@ const en: Record<string, string> = {
     'results.timeline': 'Route Timeline',
     'results.xAxisLabel': 'X-axis: {tz} time (tick = 1 hour)',
     'results.windSpeed': 'Wind Speed (kt)',
+    'results.windGust': 'Wind Gust (kt)',
     'results.boatSpeed': 'Boat Speed (kt)',
     'results.twa': 'True Wind Angle (°)',
     'results.waveHeight': 'Wave Height (m)',
@@ -135,6 +154,7 @@ const en: Record<string, string> = {
     'results.timelineNote': 'Same values as charts, sampled at each route point.',
     'results.timeCol': 'Time ({tz})',
     'results.windKt': 'Wind (kt)',
+    'results.gustKt': 'Gust (kt)',
     'results.boatKt': 'Boat (kt)',
     'results.twaDeg': 'TWA (°)',
     'results.wavesM': 'Waves (m)',
@@ -152,6 +172,7 @@ const en: Record<string, string> = {
     'results.exportCsv': 'Export CSV',
     'results.exportGeojson': 'Export GeoJSON',
     'results.showIsochrones': 'Show isochrone lines on map',
+    'results.showElevationGrid': 'Show elevation grid on map',
     'results.animate': 'Animate Route',
     'results.play': '▶ Play',
     'results.stop': '■ Stop',
@@ -191,6 +212,9 @@ const en: Record<string, string> = {
     'results.status': 'Status',
     'results.statusSelected': 'Selected',
     'results.statusCandidate': 'Candidate',
+    'results.switchingDeparture': 'Switching to selected departure candidate…',
+    'results.departureSwitchDataMissing': 'Cannot switch departure candidate: route context is no longer available. Recompute first.',
+    'results.altitudeWarning': 'Selected route enters non-zero altitude areas (max {max} m, {samples} sampled points). Review for possible land crossing.',
 
     // Tradeoff descriptions
     'tradeoff.baseline': 'Baseline route used for map and exports',
@@ -285,9 +309,20 @@ const it: Record<string, string> = {
     'tab.polars': '📊 Polare',
     'tab.settings': '⚙ Impostazioni',
     'tab.results': '📈 Risultati',
+    'tab.info': 'ℹ Info',
+
+    // Info tab
+    'info.title': 'Avviso importante',
+    'info.educational': 'Questo plugin è fornito esclusivamente per scopi educativi e informativi.',
+    'info.liability': 'Utilizzando questo plugin, riconosci di essere l\'unico responsabile di tutte le decisioni e azioni basate sui risultati forniti. Gli autori e i contributori declinano ogni responsabilità per perdite, danni, lesioni o conseguenze derivanti dal suo utilizzo.',
+    'info.verify': 'Verifica sempre in modo indipendente rotte, meteo, pericoli, normative e dettagli di navigazione usando carte nautiche ufficiali e aggiornate e strumenti adeguati.',
 
     // Route tab — hints & no-go zones
     'route.hint': 'Clicca "+ Aggiungi punto", poi clicca sulla mappa per posizionare i punti.',
+    'route.basic': 'Impostazioni base rotta',
+    'route.selectPolar': 'Diagramma polare:',
+    'route.polarHint': 'Gestisci o crea polari nella scheda Polare.',
+    'route.safetyWarning': 'Avviso di sicurezza: verifica sempre la rotta calcolata. Le rotte possono attraversare terra o aree non sicure. Controlla sempre con carte nautiche prima di navigare.',
     'nogo.title': '🚫 Zone vietate',
     'nogo.drawing':
         'Clicca sulla mappa per aggiungere vertici ({count} inseriti). Servono almeno 3 punti.',
@@ -301,7 +336,7 @@ const it: Record<string, string> = {
     'btn.compute': 'Calcola rotta meteo',
     'btn.computing': 'Calcolo in corso…',
     'compute.noWaypoints': 'Aggiungi almeno 2 punti per calcolare la rotta.',
-    'compute.noPolar': 'Seleziona un polare nella scheda Polare.',
+    'compute.noPolar': 'Seleziona un polare nella scheda Rotta (o gestiscilo in Polare).',
 
     // Progress / error messages
     'progress.fetchingWind': 'Recupero dati vento…',
@@ -322,6 +357,7 @@ const it: Record<string, string> = {
     // Map popup
     'popup.speed': 'Velocità',
     'popup.wind': 'Vento',
+    'popup.gust': 'Raffiche',
     'popup.waves': 'Onde',
     'popup.twa': 'TWA',
     'popup.motoring': '⚙ Motore',
@@ -372,6 +408,12 @@ const it: Record<string, string> = {
     'settings.deadlineNote':
         'In modalità scadenza si usa la rotta più rapida che rispetta il vincolo.',
     'settings.maxDuration': 'Durata massima (ore):',
+    'settings.elevationResolution': 'Dettaglio fetch altitudine:',
+    'settings.elevationBatchSize': 'Dimensione batch altitudine:',
+    'settings.elevationCoarse': 'Grossolano (veloce)',
+    'settings.elevationStandard': 'Standard',
+    'settings.elevationFine': 'Fine',
+    'settings.elevationUltra': 'Ultra (lento)',
     'settings.maxWind': 'Limite vento massimo (kt):',
     'settings.maxWindNote': 'Default 25 kt, imposta 0 per disabilitare.',
     'settings.maxWaveLimit': 'Limite altezza onde',
@@ -403,6 +445,7 @@ const it: Record<string, string> = {
     'results.timeline': 'Cronologia rotta',
     'results.xAxisLabel': 'Asse X: ora {tz} (tacca = 1 ora)',
     'results.windSpeed': 'Velocità vento (kt)',
+    'results.windGust': 'Raffiche vento (kt)',
     'results.boatSpeed': 'Velocità barca (kt)',
     'results.twa': 'Angolo vento reale (°)',
     'results.waveHeight': 'Altezza onde (m)',
@@ -411,6 +454,7 @@ const it: Record<string, string> = {
         'Stessi valori dei grafici, campionati ad ogni punto rotta.',
     'results.timeCol': 'Ora ({tz})',
     'results.windKt': 'Vento (kt)',
+    'results.gustKt': 'Raffiche (kt)',
     'results.boatKt': 'Barca (kt)',
     'results.twaDeg': 'TWA (°)',
     'results.wavesM': 'Onde (m)',
@@ -428,6 +472,7 @@ const it: Record<string, string> = {
     'results.exportCsv': 'Esporta CSV',
     'results.exportGeojson': 'Esporta GeoJSON',
     'results.showIsochrones': 'Mostra isocroni sulla mappa',
+    'results.showElevationGrid': 'Mostra griglia altitudine sulla mappa',
     'results.animate': 'Anima rotta',
     'results.play': '▶ Avvia',
     'results.stop': '■ Ferma',
@@ -467,6 +512,9 @@ const it: Record<string, string> = {
     'results.status': 'Stato',
     'results.statusSelected': 'Selezionata',
     'results.statusCandidate': 'Candidata',
+    'results.switchingDeparture': 'Passaggio alla partenza selezionata…',
+    'results.departureSwitchDataMissing': 'Impossibile cambiare partenza: il contesto rotta non e piu disponibile. Ricalcola prima.',
+    'results.altitudeWarning': 'La rotta selezionata entra in aree con altitudine non zero (max {max} m, {samples} punti campionati). Verifica possibile attraversamento terra.',
 
     // Tradeoff descriptions
     'tradeoff.baseline': 'Rotta principale usata per mappa ed esportazioni',
@@ -616,7 +664,9 @@ export function tGet(key: string, params?: Record<string, string | number>): str
 
 /** Locale-aware short date/time formatter (MM/DD HH:MM for en; DD/MM HH:MM for it). */
 export function formatShortDate(ts: number, local: boolean): string {
-    if (!ts) return '--';
+    if (!ts) {
+        return '--';
+    }
     const d = new Date(ts);
     const loc = get(locale);
     const pad = (n: number) => String(n).padStart(2, '0');
