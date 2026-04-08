@@ -150,6 +150,7 @@
     import { map, markers } from '@windy/map';
     import { singleclick } from '@windy/singleclick';
     import store from '@windy/store';
+    import { download as windyDownload, copy2clipboard } from '@windy/utils';
 
     import { onDestroy, onMount } from 'svelte';
 
@@ -650,7 +651,7 @@
     }
 
     function onExportRoute(e: CustomEvent<'gpx' | 'csv' | 'geojson'>) {
-        exportRoute(e.detail);
+        void exportRoute(e.detail);
     }
 
     function onAnimationControl(e: CustomEvent<{ playing: boolean; speed: number }>) {
@@ -790,29 +791,30 @@
         return '#f44336';
     }
 
-    function exportRoute(format: 'gpx' | 'csv' | 'geojson') {
+    async function exportRoute(format: 'gpx' | 'csv' | 'geojson') {
         if (!routeResult || routeResult.optimalPath.length < 2) {
             errorMsg = tGet('error.noRoute');
             return;
         }
 
+        errorMsg = '';
         const route = routeResult.optimalPath;
         const stamp = new Date().toISOString().replace(/[:.]/g, '-');
 
         if (format === 'gpx') {
             const content = routeToGPX(route);
-            downloadTextFile(`weather-route-${stamp}.gpx`, content, 'application/gpx+xml');
+            await downloadTextFile(`weather-route-${stamp}.gpx`, content, 'application/gpx+xml');
             return;
         }
 
         if (format === 'csv') {
             const content = routeToCSV(route);
-            downloadTextFile(`weather-route-${stamp}.csv`, content, 'text/csv');
+            await downloadTextFile(`weather-route-${stamp}.csv`, content, 'text/csv');
             return;
         }
 
         const content = routeToGeoJSON(route);
-        downloadTextFile(`weather-route-${stamp}.geojson`, content, 'application/geo+json');
+        await downloadTextFile(`weather-route-${stamp}.geojson`, content, 'application/geo+json');
     }
 
     function routeToCSV(route: IsochronePoint[]): string {
@@ -885,14 +887,38 @@
         return JSON.stringify(featureCollection, null, 2);
     }
 
-    function downloadTextFile(fileName: string, content: string, mimeType: string) {
-        const blob = new Blob([content], { type: mimeType });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = fileName;
-        a.click();
-        URL.revokeObjectURL(url);
+    async function downloadTextFile(fileName: string, content: string, mimeType: string) {
+        try {
+            windyDownload(content, mimeType, fileName);
+            return;
+        } catch {
+            // Continue with mobile-safe fallbacks.
+        }
+
+        const file = new File([content], fileName, { type: mimeType });
+        const nav = navigator as Navigator & {
+            canShare?: (data: ShareData) => boolean;
+        };
+
+        try {
+            if (typeof nav.share === 'function' && typeof nav.canShare === 'function' && nav.canShare({ files: [file] })) {
+                await nav.share({
+                    files: [file],
+                    title: fileName,
+                });
+                return;
+            }
+        } catch {
+            // Continue to clipboard fallback.
+        }
+
+        try {
+            copy2clipboard(content);
+            alert(tGet('export.copiedClipboard', { name: fileName }));
+            return;
+        } catch {
+            errorMsg = tGet('error.exportUnsupported');
+        }
     }
 
     // --- Cleanup ---

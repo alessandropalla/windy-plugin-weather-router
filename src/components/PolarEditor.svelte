@@ -108,6 +108,7 @@
 <script lang="ts">
     import { onMount } from 'svelte';
     import { createEventDispatcher } from 'svelte';
+    import { download as windyDownload, copy2clipboard } from '@windy/utils';
     import type { PolarDiagram, BoatConfig } from '../types/polar';
     import {
         parsePolarCSV,
@@ -216,16 +217,41 @@
         onSelectPolar();
     }
 
-    function exportCSV() {
+    async function exportCSV() {
         if (!polar) return;
         const csv = polarToCSV(polar);
-        const blob = new Blob([csv], { type: 'text/csv' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${polar.name}.csv`;
-        a.click();
-        URL.revokeObjectURL(url);
+        const fileName = `${polar.name}.csv`;
+
+        try {
+            windyDownload(csv, 'text/csv', fileName);
+            return;
+        } catch {
+            // Continue with mobile-safe fallbacks.
+        }
+
+        const file = new File([csv], fileName, { type: 'text/csv' });
+        const nav = navigator as Navigator & {
+            canShare?: (data: ShareData) => boolean;
+        };
+
+        try {
+            if (typeof nav.share === 'function' && typeof nav.canShare === 'function' && nav.canShare({ files: [file] })) {
+                await nav.share({
+                    files: [file],
+                    title: fileName,
+                });
+                return;
+            }
+        } catch {
+            // Continue to clipboard fallback.
+        }
+
+        try {
+            copy2clipboard(csv);
+            alert(tGet('export.copiedClipboard', { name: fileName }));
+        } catch {
+            importError = tGet('error.exportUnsupported');
+        }
     }
 
     function onFileImport(e: Event) {

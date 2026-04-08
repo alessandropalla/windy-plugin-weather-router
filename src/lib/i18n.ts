@@ -40,6 +40,10 @@ const en: Record<string, string> = {
     'error.noPolar': 'Please select or import a polar in the Polars tab before computing.',
     'error.routingFailed': 'Routing failed: {msg}',
     'error.noRoute': 'No route available to export yet.',
+    'error.exportUnsupported':
+        'Export is not available on this device. Try opening the plugin on desktop Windy.',
+    'export.copiedClipboard':
+        'Direct download is unavailable here. Export content was copied to clipboard. Paste it into a file named "{name}".',
 
     // Map popup
     'popup.speed': 'Speed',
@@ -310,6 +314,10 @@ const it: Record<string, string> = {
     'error.noPolar': "Seleziona o importa un polare nella scheda Polare prima di calcolare.",
     'error.routingFailed': 'Calcolo rotta fallito: {msg}',
     'error.noRoute': 'Nessuna rotta disponibile da esportare.',
+    'error.exportUnsupported':
+        'L\'esportazione non e disponibile su questo dispositivo. Prova ad aprire il plugin su Windy desktop.',
+    'export.copiedClipboard':
+        'Il download diretto non e disponibile qui. Il contenuto e stato copiato negli appunti. Incollalo in un file chiamato "{name}".',
 
     // Map popup
     'popup.speed': 'Velocità',

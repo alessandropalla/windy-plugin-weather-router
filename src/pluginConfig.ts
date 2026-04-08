@@ -11,6 +11,7 @@ const config: ExternalPluginConfig = {
     desktopUI: 'rhpane',
     mobileUI: 'fullscreen',
     routerPath: '/weather-router',
+    desktopWidth: 600,
     addToContextmenu: true,
     listenToSingleclick: true,
     private: true,
