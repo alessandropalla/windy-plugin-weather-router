@@ -1,4 +1,18 @@
 
+<script context="module" lang="ts">
+    // Route overlays should survive plugin panel close/reopen.
+    let persistedRouteLayers: L.Layer[] = [];
+
+    function rememberRouteLayer(layer: L.Layer) {
+        persistedRouteLayers.push(layer);
+    }
+
+    function clearPersistedRouteLayers() {
+        for (const layer of persistedRouteLayers) layer.remove();
+        persistedRouteLayers = [];
+    }
+</script>
+
 <div class="plugin__mobile-header">
     {title}
 </div>
@@ -587,6 +601,7 @@
             );
 
             isochroneLines.push(segment); // reuse array for cleanup
+            rememberRouteLayer(segment);
         }
 
         // Draw isochrone fronts if toggled on
@@ -610,6 +625,7 @@
                 { color: '#888', weight: 1, opacity: 0.3 },
             ).addTo(map);
             isochroneLines.push(line);
+            rememberRouteLayer(line);
         }
     }
 
@@ -656,6 +672,7 @@
                     { color, weight: 2, opacity: 0.55, dashArray: '8,5' },
                 ).addTo(map);
                 lines.push(line);
+                rememberRouteLayer(line);
             }
             alternativePolylines.push(lines);
         }
@@ -747,6 +764,7 @@
     }
 
     function clearRouteDisplay() {
+        clearPersistedRouteLayers();
         if (optimalRoutePolyline) {
             optimalRoutePolyline.remove();
             optimalRoutePolyline = null;
@@ -871,14 +889,18 @@
     }
 
     // --- Cleanup ---
-    function removeAllMapLayers() {
+    function removeAllMapLayers({ keepRouteDisplay = false }: { keepRouteDisplay?: boolean } = {}) {
         for (const m of waypointMarkers) m.remove();
         waypointMarkers = [];
         if (routePolyline) {
             routePolyline.remove();
             routePolyline = null;
         }
-        clearRouteDisplay(); // also clears alternatives, laylines, animation
+        if (!keepRouteDisplay) {
+            clearRouteDisplay(); // also clears alternatives, laylines, animation
+        } else {
+            stopAnimation();
+        }
         for (const p of noGoMapPolygons) p.remove();
         noGoMapPolygons = [];
         removeNoGoPreview();
@@ -913,7 +935,7 @@
 
     onDestroy(() => {
         singleclick.off(name, onMapClick);
-        removeAllMapLayers();
+        removeAllMapLayers({ keepRouteDisplay: true });
     });
 </script>
 
