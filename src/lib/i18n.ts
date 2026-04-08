@@ -335,7 +335,7 @@ const it: Record<string, string> = {
     'settings.utc': 'UTC',
     'settings.useLocalTime': 'Usa ora locale (fuso orario del browser)',
     'settings.optimizeDeparture': 'Ottimizza orario di partenza',
-    'settings.testWindow': 'Finestra di test (ore):',
+    'settings.testWindow': 'Finestra di partenza (ore):',
     'settings.testEvery': 'Testa ogni (ore):',
     'settings.arrivalDeadline': 'Imposta scadenza di arrivo',
     'settings.arriveBy': 'Arriva entro ({tz}):',

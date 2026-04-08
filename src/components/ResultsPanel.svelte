@@ -322,6 +322,19 @@
     // Animation
     let animSpeed = 5; // steps per second
 
+    type TimelineRow = {
+        index: number;
+        timeLabel: string;
+        windKt: string;
+        boatspeedKt: string;
+        twaDeg: string;
+        waveM: string;
+        isMotoring: boolean;
+    };
+
+    let timelinePath: IsochronePoint[] = [];
+    let timelineRows: TimelineRow[] = [];
+
     type ComparisonRow = {
         routeLabel: string;
         primary: boolean;
@@ -354,29 +367,70 @@
         if (animating) dispatch('animationControl', { playing: true, speed: animSpeed });
     }
 
-    // Re-evaluated whenever result or locale ($t) changes
-    $: timelineRows = $t && result
-        ? result.optimalPath.map((p, idx) => ({
-              index: idx,
-              timeLabel: formatTime(p.time),
-              windKt: p.tws.toFixed(1),
-              boatspeedKt: p.boatSpeed.toFixed(1),
-              twaDeg: p.twa.toFixed(0),
-                            waveM: p.waveHeight.toFixed(2),
-              isMotoring: p.isMotoring,
-          }))
-        : [];
+    // Re-evaluated whenever result changes.
+    $: timelinePath = result ? normalizeTimelinePath(result.optimalPath) : [];
 
-        $: comparisonRows = buildComparisonRows(result, alternativeResults, $t);
+    // Re-evaluated whenever route data or locale ($t) changes.
+    $: {
+        $t;
+        timelineRows = timelinePath.map((p, idx) => ({
+            index: idx,
+            timeLabel: formatTime(p.time),
+            windKt: p.tws.toFixed(1),
+            boatspeedKt: p.boatSpeed.toFixed(1),
+            twaDeg: p.twa.toFixed(0),
+            waveM: p.waveHeight.toFixed(2),
+            isMotoring: p.isMotoring,
+        }));
+    }
+
+    $: comparisonRows = buildComparisonRows(result, alternativeResults, $t);
 
     afterUpdate(() => {
-        if (result && result.optimalPath.length > 1) {
-            drawTimelineChart(windChartEl, result.optimalPath, p => p.tws, '#4dc9f6', 'kt');
-            drawTimelineChart(speedChartEl, result.optimalPath, p => p.boatSpeed, '#f67019', 'kt');
-            drawTimelineChart(twaChartEl, result.optimalPath, p => p.twa, '#acc236', '°');
-            drawTimelineChart(wavesChartEl, result.optimalPath, p => p.waveHeight, '#00bcd4', 'm');
+        if (timelinePath.length > 1) {
+            drawTimelineChart(windChartEl, timelinePath, p => p.tws, '#4dc9f6', 'kt');
+            drawTimelineChart(speedChartEl, timelinePath, p => p.boatSpeed, '#f67019', 'kt');
+            drawTimelineChart(twaChartEl, timelinePath, p => p.twa, '#acc236', '°');
+            drawTimelineChart(wavesChartEl, timelinePath, p => p.waveHeight, '#00bcd4', 'm');
         }
     });
+
+    function normalizeTimelinePath(path: IsochronePoint[]): IsochronePoint[] {
+        if (path.length < 2) {
+            return path;
+        }
+
+        const first = path[0];
+        const hasArtificialSeedValues =
+            first.tws === 0 &&
+            first.boatSpeed === 0 &&
+            first.twa === 0 &&
+            first.waveHeight === 0;
+
+        if (!hasArtificialSeedValues) {
+            return path;
+        }
+
+        const firstMeasuredIndex = path.findIndex(
+            p => p.tws > 0 || p.boatSpeed > 0 || p.twa > 0 || p.waveHeight > 0,
+        );
+
+        if (firstMeasuredIndex <= 0) {
+            return path;
+        }
+
+        const measured = path[firstMeasuredIndex];
+        const normalizedFirst: IsochronePoint = {
+            ...first,
+            tws: measured.tws,
+            boatSpeed: measured.boatSpeed,
+            twa: measured.twa,
+            waveHeight: measured.waveHeight,
+            isMotoring: measured.isMotoring,
+        };
+
+        return [normalizedFirst, ...path.slice(1)];
+    }
 
     function formatDuration(hours: number): string {
         const totalMinutes = Math.max(0, Math.round(hours * 60));
@@ -496,15 +550,6 @@
 
         const times = path.map(p => p.time);
         const values = path.map(valueFn);
-
-        // The first route point is the algorithm seed and often has 0-valued metrics.
-        // Replace that artificial leading zero with the first meaningful sample.
-        if (values.length > 1 && values[0] === 0) {
-            const firstNonZero = values.find(v => v > 0);
-            if (typeof firstNonZero === 'number') {
-                values[0] = firstNonZero;
-            }
-        }
 
         const minT = times[0];
         const maxT = times[times.length - 1];
