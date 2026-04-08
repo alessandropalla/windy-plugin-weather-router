@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { bearing, destinationPoint, distanceNm, normalizeAngle, computeTWA } from './geo';
+import {
+    bearing,
+    destinationPoint,
+    distanceNm,
+    normalizeAngle,
+    computeTWA,
+    msToKnots,
+    knotsToMs,
+    angularDifference,
+} from './geo';
 
 describe('geo', () => {
     it('computes approximately 60nm for one degree of longitude at equator', () => {
@@ -24,5 +33,23 @@ describe('geo', () => {
         expect(normalizeAngle(725)).toBe(5);
         expect(computeTWA(350, 10)).toBe(20);
         expect(computeTWA(10, 350)).toBe(20);
+    });
+
+    it('converts m/s and knots consistently', () => {
+        expect(msToKnots(0)).toBe(0);
+        expect(knotsToMs(0)).toBe(0);
+
+        const ms = 12.34;
+        expect(knotsToMs(msToKnots(ms))).toBeCloseTo(ms, 10);
+
+        const kt = 24.5;
+        expect(msToKnots(knotsToMs(kt))).toBeCloseTo(kt, 10);
+    });
+
+    it('computes signed wrapped angular difference', () => {
+        expect(angularDifference(10, 20)).toBe(10);
+        expect(angularDifference(350, 10)).toBe(20);
+        expect(angularDifference(10, 350)).toBe(-20);
+        expect(angularDifference(0, 181)).toBe(-179);
     });
 });

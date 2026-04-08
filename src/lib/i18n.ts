@@ -198,7 +198,7 @@ const en: Record<string, string> = {
     'tradeoff.maxWaves': 'm max waves',
 
     // PolarEditor
-    'polar.wizard': '✨ Wizard',
+    'polar.wizard': 'Create',
     'polar.manage': 'Manage',
     'polar.import': 'Import',
     'polar.edit': 'Edit',
@@ -470,7 +470,7 @@ const it: Record<string, string> = {
     'tradeoff.maxWaves': 'm onde max',
 
     // PolarEditor
-    'polar.wizard': '✨ Procedura guidata',
+    'polar.wizard': 'Creazione guidata',
     'polar.manage': 'Gestisci',
     'polar.import': 'Importa',
     'polar.edit': 'Modifica',

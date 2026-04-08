@@ -1,7 +1,8 @@
-import { describe, expect, it, vi } from 'vitest';
-import { computeRoute } from './routing';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { computeRoute, computeRouteWithDepartureOptimization } from './routing';
 import type { RouteConfig, Waypoint } from '../types/routing';
 import type { BoatConfig } from '../types/polar';
+import { getWindAtPointAndTime } from './windgrid';
 
 vi.mock('./windgrid', () => ({
     getWindAtPointAndTime: vi.fn(() => ({
@@ -61,6 +62,17 @@ function makeConfig(mode: RouteConfig['mode']): RouteConfig {
 }
 
 describe('routing computeRoute metrics and scoring', () => {
+    beforeEach(() => {
+        vi.mocked(getWindAtPointAndTime).mockImplementation(() => ({
+            tws: 10,
+            twd: 0,
+            gust: 10,
+            waveHeight: 0,
+            waveDir: 0,
+            wavePeriod: 0,
+        }));
+    });
+
     it('builds a feasible route with positive metrics and min-time score', () => {
         const result = computeRoute(waypoints, makeConfig('min-time'), { points: [], bounds: { minLat: -1, maxLat: 1, minLon: -1, maxLon: 1 }, resolution: 1 });
 
@@ -81,5 +93,54 @@ describe('routing computeRoute metrics and scoring', () => {
         expect(() =>
             computeRoute(waypoints, config, { points: [], bounds: { minLat: -1, maxLat: 1, minLon: -1, maxLon: 1 }, resolution: 1 }),
         ).toThrowError(/Arrival deadline/);
+    });
+
+    it('optimizes departure and returns ordered departure analysis', () => {
+        const base = makeConfig('min-time');
+        const config: RouteConfig = {
+            ...base,
+            optimizeDeparture: true,
+            departureWindowHours: 2,
+            departureStepHours: 1,
+        };
+
+        const progress = vi.fn();
+        const result = computeRouteWithDepartureOptimization(
+            waypoints,
+            config,
+            { points: [], bounds: { minLat: -1, maxLat: 1, minLon: -1, maxLon: 1 }, resolution: 1 },
+            progress,
+        );
+
+        expect(result.optimizedDeparture).toBe(true);
+        expect(result.departureAnalysis?.length).toBe(3);
+        expect(result.departureAnalysis?.[0].departureTime).toBe(config.departureTime);
+        expect(result.departureAnalysis?.[1].departureTime).toBe(config.departureTime + 3600 * 1000);
+        expect(result.departureAnalysis?.[2].departureTime).toBe(config.departureTime + 2 * 3600 * 1000);
+        expect(result.departureAnalysis?.filter(r => r.selected).length).toBe(1);
+        expect(progress).toHaveBeenCalled();
+    });
+
+    it('picks the latest feasible departure in arrival-deadline optimization mode', () => {
+        const stepMs = 3600 * 1000;
+        const startTime = Date.UTC(2026, 0, 1, 0, 0, 0);
+        const config: RouteConfig = {
+            ...makeConfig('arrival-deadline'),
+            departureTime: startTime,
+            optimizeDeparture: true,
+            departureWindowHours: 2,
+            departureStepHours: 1,
+            arrivalDeadline: startTime + 10 * stepMs,
+        };
+
+        const result = computeRouteWithDepartureOptimization(
+            waypoints,
+            config,
+            { points: [], bounds: { minLat: -1, maxLat: 1, minLon: -1, maxLon: 1 }, resolution: 1 },
+        );
+
+        expect(result.departureTime).toBe(startTime + 2 * stepMs);
+        expect(result.optimizationMode).toBe('arrival-deadline');
+        expect(result.metrics.arrivalTime).toBeLessThanOrEqual(config.arrivalDeadline!);
     });
 });

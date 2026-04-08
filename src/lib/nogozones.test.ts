@@ -27,4 +27,18 @@ describe('nogozones', () => {
     it('treats endpoints inside polygon as crossing', () => {
         expect(isLegCrossingNoGoZone(0.5, 0.5, 2, 2, [square])).toBe(true);
     });
+
+    it('returns false for degenerate polygons with less than 3 vertices', () => {
+        const invalidZone: NoGoZone = {
+            id: 'bad',
+            name: 'Line',
+            vertices: [
+                { lat: 0, lon: 0 },
+                { lat: 1, lon: 1 },
+            ],
+        };
+
+        expect(isPointInNoGoZone(0.5, 0.5, [invalidZone])).toBe(false);
+        expect(isLegCrossingNoGoZone(0, 0, 1, 1, [invalidZone])).toBe(false);
+    });
 });
