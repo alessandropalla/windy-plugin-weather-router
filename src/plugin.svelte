@@ -60,7 +60,10 @@
 
         <div class="form-row mb-5">
             <label class="size-xs">{$t('settings.dateTime', { tz: settingsCache.useLocalTime ? $t('settings.local') : $t('settings.utc') })}</label>
-            <input class="form-control mt-3" type="datetime-local" value={routeDepartureDateStr} on:change={onRouteDepartureChange} />
+            <div class="input-now-row">
+                <input class="form-control mt-3" type="datetime-local" value={routeDepartureDateStr} on:change={onRouteDepartureChange} />
+                <button class="button button--variant-ghost size-xs mt-3" on:click={setRouteDepartureNow}>{$t('settings.now')}</button>
+            </div>
         </div>
         <div class="form-row mb-5">
             <label class="size-xs">
@@ -417,6 +420,10 @@
         const date = isLocal ? new Date(value) : new Date(`${value}Z`);
         const ts = date.getTime();
         return Number.isFinite(ts) ? ts : Date.now();
+    }
+
+    function setRouteDepartureNow() {
+        updateSettingsCache({ departureTime: Date.now() });
     }
 
     function onRouteDepartureChange(e: Event) {
@@ -1501,6 +1508,11 @@
         display: flex;
         flex-direction: column;
         gap: 2px;
+    }
+    .input-now-row {
+        display: flex;
+        align-items: flex-start;
+        gap: 6px;
     }
     .form-control {
         width: 100%;

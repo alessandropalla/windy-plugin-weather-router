@@ -2,7 +2,10 @@
     <h3 class="size-s mb-10">{$t('settings.departure')}</h3>
     <div class="form-row mb-5">
         <label class="size-xs">{$t('settings.dateTime', { tz: useLocalTime ? $t('settings.local') : $t('settings.utc') })}</label>
-        <input class="form-control mt-3" type="datetime-local" bind:value={departureDateStr} on:change={onDepartureChange} />
+        <div class="input-now-row">
+            <input class="form-control mt-3" type="datetime-local" bind:value={departureDateStr} on:change={onDepartureChange} />
+            <button class="button button--variant-ghost size-xs mt-3" on:click={setDepartureNow}>{$t('settings.now')}</button>
+        </div>
     </div>
     <div class="form-row mb-10">
         <label class="size-xs">
@@ -309,6 +312,11 @@
         emitChange();
     }
 
+    function setDepartureNow() {
+        departureDateStr = formatInputDate(Date.now(), useLocalTime);
+        emitChange();
+    }
+
     function onDepartureChange() {
         emitChange();
     }
@@ -409,6 +417,11 @@
     }
     .indent {
         margin-left: 18px;
+    }
+    .input-now-row {
+        display: flex;
+        align-items: flex-start;
+        gap: 6px;
     }
     hr {
         border: none;
