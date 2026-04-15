@@ -73,10 +73,30 @@
     <div class="form-row mb-5">
         <label class="size-xs">{$t('settings.forecastModel')}</label>
         <select class="form-control-sm" bind:value={product} on:change={emitChange}>
-            <option value="ecmwf">ECMWF</option>
-            <option value="gfs">GFS</option>
-            <option value="icon">ICON</option>
-            <option value="iconEu">ICON-EU</option>
+            <optgroup label={$t('settings.globalModels')}>
+                <option value="ecmwf">ECMWF</option>
+                <option value="gfs">GFS</option>
+                <option value="icon">ICON</option>
+                <option value="mblue">Meteoblue</option>
+            </optgroup>
+            <optgroup label={$t('settings.regionalModels')}>
+                <option value="iconEu">ICON-EU</option>
+                <option value="iconD2">ICON-D2</option>
+                <option value="arome">AROME</option>
+                <option value="aromeFrance">AROME France</option>
+                <option value="aromeAntilles">AROME Antilles</option>
+                <option value="aromeReunion">AROME Réunion</option>
+                <option value="hrrrConus">HRRR CONUS</option>
+                <option value="hrrrAlaska">HRRR Alaska</option>
+                <option value="namConus">NAM CONUS</option>
+                <option value="namHawaii">NAM Hawaii</option>
+                <option value="namAlaska">NAM Alaska</option>
+                <option value="ukv">UKV</option>
+                <option value="canHrdps">HRDPS (Canada)</option>
+                <option value="czeAladin">ALADIN (Czech)</option>
+                <option value="jmaMsm">JMA MSM (Japan)</option>
+                <option value="bomAccess">ACCESS (Australia)</option>
+            </optgroup>
         </select>
     </div>
     <div class="form-row mb-5">

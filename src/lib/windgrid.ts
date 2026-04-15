@@ -307,16 +307,22 @@ function interpolateWaves(
 }
 
 function resolveWaveProduct(product: string): string | null {
-    if (product === 'ecmwf') {
-        return 'ecmwfWaves';
+    switch (product) {
+        case 'ecmwf':
+            return 'ecmwfWaves';
+        case 'gfs':
+            return 'gfsWaves';
+        case 'icon':
+        case 'iconEu':
+        case 'iconD2':
+            return 'iconEuWaves';
+        case 'jmaMsm':
+            return 'jmaCwmWaves';
+        case 'canHrdps':
+            return 'canRdwpsWaves';
+        default:
+            return null;
     }
-    if (product === 'gfs') {
-        return 'gfsWaves';
-    }
-    if (product === 'icon') {
-        return 'iconEuWaves';
-    }
-    return null;
 }
 
 /** Find N nearest grid points to a given lat/lon */
